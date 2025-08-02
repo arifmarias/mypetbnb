@@ -227,10 +227,11 @@ class AuthenticationTester:
                 token = self.tokens[required_role]['token']
                 success, response = self.make_request(method, endpoint, token=token, expected_status=expected_status)
                 
+                status_code = response.get('status_code', 'N/A') if isinstance(response, dict) else 'N/A'
                 result = self.log_result(
                     f"Protected Endpoint - {endpoint}",
                     success,
-                    f"Role: {required_role}, Status: {response.get('status_code', 'N/A')}"
+                    f"Role: {required_role}, Status: {status_code}"
                 )
                 all_success = all_success and result
             else:
