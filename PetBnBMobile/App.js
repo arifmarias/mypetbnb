@@ -185,7 +185,12 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <ToastProvider>
-          <NavigationContainer>
+          <NavigationContainer 
+            onReady={() => {
+              // Setup notification listeners when navigation is ready
+              // This ensures navigation is available for notification handling
+            }}
+          >
             <StatusBar style="auto" />
             <AppNavigator />
           </NavigationContainer>
