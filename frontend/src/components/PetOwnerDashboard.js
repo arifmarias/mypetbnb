@@ -16,7 +16,9 @@ import {
   Filter,
   Search,
   Eye
-} from 'lucide-react';
+import LoadingSpinner, { PageSkeleton } from './LoadingSpinner';
+import { useToast } from './Toast';
+import PetCreationModal from './PetCreationModal';
 
 const PetOwnerDashboard = () => {
   const { user } = useAuth();
