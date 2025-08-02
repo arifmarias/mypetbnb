@@ -195,7 +195,12 @@ async def login(user_credentials: UserLogin, db=Depends(get_db_client)):
         if not verify_password(user_credentials.password, user["password_hash"]):
             raise HTTPException(status_code=401, detail="Incorrect email or password")
         
-        access_token = create_access_token(data={"sub": user_credentials.email, "user_id": user["id"], "user_type": user["user_type"]})
+        access_token = create_access_token(data={
+            "sub": user_credentials.email, 
+            "user_id": user["id"], 
+            "user_type": user["user_type"],
+            "email": user_credentials.email
+        })
         return {"access_token": access_token, "token_type": "bearer", "user_id": user["id"]}
         
     except HTTPException:
