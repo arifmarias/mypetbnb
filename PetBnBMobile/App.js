@@ -13,6 +13,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ToastProvider } from './src/context/ToastContext';
 
+// Services
+import notificationService from './src/components/NotificationService';
+
 // Screens
 import WelcomeScreen from './src/screens/WelcomeScreen';
 import LoginScreen from './src/screens/LoginScreen';
