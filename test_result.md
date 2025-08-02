@@ -278,16 +278,16 @@ frontend:
         comment: "API service with axios configuration and endpoint methods completed"
 
   - task: "Native Mobile Features Integration"
-    implemented: false
-    working: "NA"
-    file: "To be implemented"
+    implemented: true
+    working: true
+    file: "/app/PetBnBMobile/src/components/ImagePicker.js, NotificationService.js, MapView.js"
     stuck_count: 0
     priority: "medium"
     needs_retesting: true
     status_history:
-      - working: "NA"
+      - working: true
         agent: "main"
-        comment: "Camera integration, push notifications, and native maps features need implementation"
+        comment: "Native mobile features implemented: Camera integration with ImagePicker component using expo-image-picker and expo-camera for pet photo uploads with base64 conversion. Push notification service using expo-notifications with scheduled local notifications, permission handling, and notification response navigation. MapView component with location services using expo-location, service markers, and interactive map controls. AddPetScreen with comprehensive pet profile creation including medical info, behavior traits, and care instructions."
 
 metadata:
   created_by: "main_agent"
