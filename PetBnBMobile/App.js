@@ -30,6 +30,13 @@ import BookingScreen from './src/screens/BookingScreen';
 import PetDetailsScreen from './src/screens/PetDetailsScreen';
 import ServiceDetailsScreen from './src/screens/ServiceDetailsScreen';
 import AddPetScreen from './src/screens/AddPetScreen';
+import ChatScreen from './src/screens/ChatScreen';
+import EditProfileScreen from './src/screens/EditProfileScreen';
+import PaymentMethodsScreen from './src/screens/PaymentMethodsScreen';
+import MyServicesScreen from './src/screens/MyServicesScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import HelpSupportScreen from './src/screens/HelpSupportScreen';
+import AboutScreen from './src/screens/AboutScreen';
 
 // Suppress specific warnings
 LogBox.ignoreLogs([
