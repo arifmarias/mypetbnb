@@ -115,8 +115,12 @@ const AuthModal = ({ mode, onClose, onSwitchMode }) => {
           
           <div className="text-center space-y-2">
             <div className="flex items-center justify-center space-x-2">
-              <Heart className="h-8 w-8 text-purple-600" fill="currentColor" />
-              <span className="text-2xl font-bold gradient-primary bg-clip-text text-transparent">
+              <img 
+                src="https://customer-assets.emergentagent.com/job_petcare-2/artifacts/rp3sqb5r_logo.webp" 
+                alt="PetBnB" 
+                className="h-8 w-8 object-contain" 
+              />
+              <span className="text-2xl font-bold" style={{ color: '#FF5A5F' }}>
                 PetBnB
               </span>
             </div>
