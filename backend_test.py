@@ -248,9 +248,10 @@ class PetBnBAPITester:
         pet_owner_data = {
             "email": f"petowner_{timestamp}@test.com",
             "password": "TestPass123!",
-            "full_name": "Test Pet Owner",
+            "first_name": "Test",
+            "last_name": "PetOwner",
             "phone": "+65 9123 4567",
-            "role": "pet_owner"
+            "user_type": "pet_owner"
         }
         
         success, response = self.make_request('POST', '/api/auth/register', pet_owner_data, expected_status=200)
@@ -265,9 +266,10 @@ class PetBnBAPITester:
         caregiver_data = {
             "email": f"caregiver_{timestamp}@test.com",
             "password": "TestPass123!",
-            "full_name": "Test Caregiver",
+            "first_name": "Test",
+            "last_name": "Caregiver", 
             "phone": "+65 9876 5432",
-            "role": "caregiver"
+            "user_type": "caregiver"
         }
         
         success, response = self.make_request('POST', '/api/auth/register', caregiver_data, expected_status=200)
