@@ -503,14 +503,18 @@ class PetBnBAPITester:
         return send_success and get_success
 
     def run_all_tests(self):
-        """Run all backend tests"""
-        print("🚀 Starting PetBnB Backend API Tests")
-        print("=" * 50)
+        """Run all backend tests with focus on authentication"""
+        print("🚀 Starting PetBnB Backend API Tests - Authentication Focus")
+        print("=" * 60)
         
-        # Run tests in order
+        # Run tests in order - prioritizing authentication tests
         test_methods = [
             self.test_health_check,
+            self.test_database_tables_exist,
+            self.test_demo_account_login,
             self.test_user_registration,
+            self.test_jwt_token_creation,
+            self.test_token_validation_detailed,
             self.test_user_login,
             self.test_get_current_user,
             self.test_pet_management,
@@ -530,9 +534,9 @@ class PetBnBAPITester:
                 self.log_test(test_method.__name__, False, f"Exception: {str(e)}")
         
         # Print summary
-        print("\n" + "=" * 50)
-        print("📊 TEST SUMMARY")
-        print("=" * 50)
+        print("\n" + "=" * 60)
+        print("📊 TEST SUMMARY - AUTHENTICATION FOCUS")
+        print("=" * 60)
         print(f"Total Tests: {self.tests_run}")
         print(f"Passed: {self.tests_passed}")
         print(f"Failed: {self.tests_run - self.tests_passed}")
@@ -544,6 +548,13 @@ class PetBnBAPITester:
             print("\n❌ FAILED TESTS:")
             for test in failed_tests:
                 print(f"  - {test['name']}: {test['details']}")
+        
+        # Print authentication-specific summary
+        auth_tests = [test for test in self.test_results if 'auth' in test['name'].lower() or 'token' in test['name'].lower() or 'login' in test['name'].lower()]
+        auth_passed = len([test for test in auth_tests if test['success']])
+        auth_total = len(auth_tests)
+        
+        print(f"\n🔐 AUTHENTICATION TESTS: {auth_passed}/{auth_total} passed")
         
         return self.tests_passed == self.tests_run
 
