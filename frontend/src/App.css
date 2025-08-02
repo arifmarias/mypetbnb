@@ -328,26 +328,89 @@ body {
   color: white;
 }
 
-/* Responsive utilities */
+/* Enhanced mobile responsiveness */
 @media (max-width: 768px) {
   .btn {
-    padding: 0.625rem 1.25rem;
-    font-size: 0.8125rem;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.875rem;
+    min-height: 44px; /* iOS touch target */
+    border-radius: 12px;
   }
   
   .card {
-    border-radius: 12px;
+    border-radius: 16px;
+    margin-bottom: 1rem;
   }
   
   .card-header,
   .card-body,
   .card-footer {
-    padding: 1rem;
+    padding: 1.25rem;
   }
   
   .modal-content {
-    border-radius: 16px;
-    margin: 0.5rem;
+    border-radius: 20px;
+    margin: 1rem;
+    max-height: calc(100vh - 2rem);
+  }
+  
+  /* Better mobile form inputs */
+  .form-input {
+    min-height: 44px;
+    font-size: 16px; /* Prevent zoom on iOS */
+    border-radius: 12px;
+  }
+  
+  /* Mobile-friendly navigation */
+  .nav-link {
+    padding: 0.75rem 1rem;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+}
+
+/* Touch-friendly improvements */
+.btn, .card, .nav-link {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Better loading states */
+.skeleton-pulse {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Improved mobile containers */
+@media (max-width: 640px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .grid-cols-1 {
+    gap: 1rem;
+  }
+  
+  /* Stack mobile layouts */
+  .md\:grid-cols-2,
+  .md\:grid-cols-3,
+  .lg\:grid-cols-4 {
+    grid-template-columns: 1fr;
   }
 }
 
