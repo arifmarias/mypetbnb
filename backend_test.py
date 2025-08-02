@@ -367,6 +367,7 @@ class PetBnBAPITester:
             self.test_location_search,
             self.test_booking_creation,
             self.test_get_bookings,
+            self.test_messaging_system,
             self.test_payment_intent,
             self.test_file_upload_endpoint
         ]
