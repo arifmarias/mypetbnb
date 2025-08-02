@@ -423,23 +423,12 @@ const PetOwnerDashboard = () => {
         )}
       </div>
 
-      {/* Add Pet Modal would go here */}
-      {showAddPetModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="p-6">
-              <h3 className="text-xl font-semibold mb-4">Add New Pet</h3>
-              <p className="text-gray-600">Pet creation form coming soon...</p>
-              <button
-                onClick={() => setShowAddPetModal(false)}
-                className="btn btn-secondary mt-4"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Pet Creation Modal */}
+      <PetCreationModal
+        isOpen={showAddPetModal}
+        onClose={() => setShowAddPetModal(false)}
+        onPetCreated={handlePetCreated}
+      />
     </div>
   );
 };
