@@ -23,7 +23,7 @@ const ServiceCreationModal = ({ isOpen, onClose, onServiceCreated }) => {
 
   const serviceTypes = [
     { value: 'pet_boarding', label: 'Pet Boarding', hasDuration: false },
-    { value: 'dog_walking', label: 'Dog Walking', hasuration: true },
+    { value: 'dog_walking', label: 'Dog Walking', hasDuration: true },
     { value: 'pet_grooming', label: 'Pet Grooming', hasDuration: true },
     { value: 'daycare', label: 'Pet Daycare', hasDuration: false },
     { value: 'pet_sitting', label: 'Pet Sitting', hasDuration: false },
