@@ -29,6 +29,7 @@ import CaregiverDashboard from './src/screens/CaregiverDashboard';
 import BookingScreen from './src/screens/BookingScreen';
 import PetDetailsScreen from './src/screens/PetDetailsScreen';
 import ServiceDetailsScreen from './src/screens/ServiceDetailsScreen';
+import AddPetScreen from './src/screens/AddPetScreen';
 
 // Suppress specific warnings
 LogBox.ignoreLogs([
