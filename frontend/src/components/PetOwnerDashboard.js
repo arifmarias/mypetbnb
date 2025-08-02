@@ -24,6 +24,7 @@ import {
 const PetOwnerDashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
   const [pets, setPets] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,9 +45,15 @@ const PetOwnerDashboard = () => {
       setBookings(bookingsResponse.data || []);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
+      toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePetCreated = (newPet) => {
+    setPets(prev => [...prev, newPet]);
+    toast.success(`${newPet.name} has been added to your pets!`);
   };
 
   const getStatusColor = (status) => {
