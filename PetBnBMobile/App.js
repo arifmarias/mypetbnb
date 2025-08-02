@@ -151,6 +151,13 @@ function AppNavigator() {
           <Stack.Screen name="PetDetails" component={PetDetailsScreen} />
           <Stack.Screen name="ServiceDetails" component={ServiceDetailsScreen} />
           <Stack.Screen name="AddPet" component={AddPetScreen} />
+          <Stack.Screen name="ChatScreen" component={ChatScreen} />
+          <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+          <Stack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
+          <Stack.Screen name="MyServices" component={MyServicesScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
+          <Stack.Screen name="About" component={AboutScreen} />
         </>
       ) : (
         <Stack.Screen name="Auth" component={AuthNavigator} />
