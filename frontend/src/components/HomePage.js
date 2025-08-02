@@ -123,7 +123,12 @@ const HomePage = () => {
           <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
             <h1 className="text-4xl sm:text-5xl lg:text-7xl font-bold text-white leading-tight">
               Find the Perfect
-              <span className="block gradient-warm bg-clip-text text-transparent">
+              <span className="block" style={{ 
+                background: 'linear-gradient(135deg, #FF7E82 0%, #FC642D 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text'
+              }}>
                 Pet Care
               </span>
               Near You
