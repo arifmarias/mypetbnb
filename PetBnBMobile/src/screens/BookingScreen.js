@@ -108,7 +108,7 @@ const BookingScreen = ({ route, navigation }) => {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       toast.success('Booking request sent successfully!');
-      navigation.navigate('Dashboard');
+      navigation.navigate('MainTabs', { screen: 'Dashboard' });
       
     } catch (error) {
       console.error('Booking failed:', error);
