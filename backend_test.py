@@ -318,6 +318,39 @@ class PetBnBAPITester:
         return self.log_test("File Upload Endpoint", endpoint_exists,
                            "Endpoint accessible (validation error expected)")
 
+    def test_messaging_system(self):
+        """Test messaging system endpoints"""
+        print("\n🔍 Testing Messaging System...")
+        
+        if not self.pet_owner_token or not self.caregiver_token or not self.booking_id:
+            return self.log_test("Messaging System", False, 
+                               "Missing required data (tokens or booking_id)")
+        
+        # Send a message from pet owner to caregiver
+        message_data = {
+            "booking_id": self.booking_id,
+            "receiver_id": self.caregiver_id,
+            "content": "Hello! Looking forward to the booking.",
+            "message_type": "text"
+        }
+        
+        success, response = self.make_request('POST', '/api/messages', message_data,
+                                            token=self.pet_owner_token, expected_status=200)
+        
+        send_success = self.log_test("Send Message", success, 
+                                   f"Message sent: {response.get('id', 'N/A')}")
+        
+        # Get messages for the booking
+        success, response = self.make_request('GET', f'/api/messages/{self.booking_id}',
+                                            token=self.pet_owner_token)
+        
+        messages_retrieved = success and isinstance(response, list) and len(response) > 0
+        
+        get_success = self.log_test("Get Booking Messages", messages_retrieved,
+                                  f"Retrieved {len(response) if isinstance(response, list) else 0} messages")
+        
+        return send_success and get_success
+
     def run_all_tests(self):
         """Run all backend tests"""
         print("🚀 Starting PetBnB Backend API Tests")
