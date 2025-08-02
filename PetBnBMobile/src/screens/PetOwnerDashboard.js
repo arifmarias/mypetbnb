@@ -208,7 +208,7 @@ const PetOwnerDashboard = ({ navigation }) => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>My Pets</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('AddPet')}>
               <Text style={styles.seeAllText}>Add Pet</Text>
             </TouchableOpacity>
           </View>
