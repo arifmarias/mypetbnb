@@ -10,6 +10,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import MapView from '../components/MapView';
 
 const SearchScreen = ({ route, navigation }) => {
   const [searchQuery, setSearchQuery] = useState(route?.params?.query || '');
