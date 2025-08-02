@@ -17,8 +17,13 @@ import cloudinary.uploader
 from geopy.distance import geodesic
 import googlemaps
 import smtplib
-from email.mime.text import MimeText
-from email.mime.multipart import MimeMultipart
+try:
+    from email.mime.text import MimeText
+    from email.mime.multipart import MimeMultipart
+except ImportError:
+    # Fallback for different Python versions
+    from email.mime.text import MIMEText as MimeText
+    from email.mime.multipart import MIMEMultipart as MimeMultipart
 import asyncio
 import httpx
 from enum import Enum
