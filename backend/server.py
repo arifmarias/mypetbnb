@@ -1,7 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr, validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -29,6 +28,19 @@ import httpx
 from enum import Enum
 import logging
 
+# Import new Supabase modules
+from database import get_db_client, startup_event, shutdown_event
+from models import (
+    UserCreate, UserUpdate, UserResponse, UserLogin, LoginResponse,
+    PetCreate, PetUpdate, PetResponse,
+    CaregiverServiceCreate, CaregiverServiceResponse, CaregiverProfileResponse,
+    BookingCreate, BookingResponse, BookingStatus, PaymentStatus,
+    ReviewCreate, ReviewResponse,
+    MessageCreate, MessageResponse,
+    LocationSearch, ServiceType
+)
+from auth import AuthService, get_current_user
+
 # Load environment variables
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -36,12 +48,6 @@ load_dotenv(ROOT_DIR / '.env')
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# MongoDB connection
-MONGO_URL = os.environ['MONGO_URL']
-DB_NAME = os.environ['DB_NAME']
-client = AsyncIOMotorClient(MONGO_URL)
-db = client[DB_NAME]
 
 # Configuration
 JWT_SECRET_KEY = os.environ['JWT_SECRET_KEY']
@@ -62,7 +68,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
 # FastAPI app
-app = FastAPI(title="PetBnB API", version="1.0.0")
+app = FastAPI(title="PetBnB API", version="2.0.0")
 api_router = APIRouter(prefix="/api")
 
 # CORS middleware
@@ -74,158 +80,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Enums
-class UserRole(str, Enum):
-    PET_OWNER = "pet_owner"
-    CAREGIVER = "caregiver"
-    ADMIN = "admin"
-
-class ServiceType(str, Enum):
-    PET_BOARDING = "pet_boarding"
-    DOG_WALKING = "dog_walking"
-    PET_GROOMING = "pet_grooming"
-    DAYCARE = "daycare"
-    PET_SITTING = "pet_sitting"
-    VET_TRANSPORT = "vet_transport"
-    CUSTOM = "custom"
-
-class BookingStatus(str, Enum):
-    PENDING = "pending"
-    CONFIRMED = "confirmed"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    CANCELLED = "cancelled"
-
-class PaymentStatus(str, Enum):
-    PENDING = "pending"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    REFUNDED = "refunded"
-
-# Pydantic Models
-class UserBase(BaseModel):
-    email: EmailStr
-    full_name: str
-    phone: Optional[str] = None
-    role: UserRole
-    profile_image_url: Optional[str] = None
-    address: Optional[str] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    is_verified: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-class UserCreate(BaseModel):
-    email: EmailStr
-    password: str
-    full_name: str
-    phone: Optional[str] = None
-    role: UserRole
-
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
-
-class User(UserBase):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    hashed_password: str
-
-class PetBase(BaseModel):
-    name: str
-    breed: str
-    age: int
-    weight: float
-    gender: str
-    description: Optional[str] = None
-    medical_info: Optional[str] = None
-    behavioral_notes: Optional[str] = None
-    photo_urls: List[str] = []
-    vaccination_records: List[str] = []
-    emergency_contact: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-class Pet(PetBase):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    owner_id: str
-
-class PetCreate(PetBase):
-    pass
-
-class CaregiverServiceBase(BaseModel):
-    service_type: ServiceType
-    title: str
-    description: str
-    base_price: float
-    duration_minutes: Optional[int] = None
-    max_pets: int = 1
-    service_area_radius: float = 10.0  # in kilometers
-    is_active: bool = True
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-class CaregiverService(CaregiverServiceBase):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    caregiver_id: str
-
-class CaregiverServiceCreate(CaregiverServiceBase):
-    pass
-
-class CaregiverProfile(BaseModel):
-    user_id: str
-    bio: str
-    experience_years: int
-    certifications: List[str] = []
-    portfolio_images: List[str] = []
-    availability: Dict[str, List[str]] = {}  # day_of_week: [time_slots]
-    rating: float = 0.0
-    total_reviews: int = 0
-    is_background_verified: bool = False
-    insurance_info: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-class BookingBase(BaseModel):
-    pet_ids: List[str]
-    service_id: str
-    start_datetime: datetime
-    end_datetime: datetime
-    total_amount: float
-    special_requirements: Optional[str] = None
-    status: BookingStatus = BookingStatus.PENDING
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-class Booking(BookingBase):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    pet_owner_id: str
-    caregiver_id: str
-
-class BookingCreate(BookingBase):
-    pass
-
-class Review(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    booking_id: str
-    reviewer_id: str
-    reviewee_id: str
-    rating: int = Field(..., ge=1, le=5)
-    comment: Optional[str] = None
-    response: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-class Message(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    booking_id: str
-    sender_id: str
-    receiver_id: str
-    content: str
-    message_type: str = "text"  # text, image, document
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-class LocationSearch(BaseModel):
-    latitude: float
-    longitude: float
-    radius: float = 10.0  # kilometers
-    service_type: Optional[ServiceType] = None
-    min_rating: Optional[float] = None
-    max_price: Optional[float] = None
+# Add startup and shutdown events
+app.add_event_handler("startup", startup_event)
+app.add_event_handler("shutdown", shutdown_event)
 
 # Utility functions
 def create_access_token(data: dict):
@@ -240,22 +97,6 @@ def verify_password(plain_password, hashed_password):
 
 def get_password_hash(password):
     return pwd_context.hash(password)
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    try:
-        token = credentials.credentials
-        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-    except jwt.PyJWTError:
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-    
-    user = await db.users.find_one({"email": email})
-    if user is None:
-        raise HTTPException(status_code=401, detail="User not found")
-    
-    return User(**user)
 
 def calculate_distance(lat1, lon1, lat2, lon2):
     return geodesic((lat1, lon1), (lat2, lon2)).kilometers
@@ -286,190 +127,310 @@ async def send_email(to_email: str, subject: str, body: str):
 
 # Authentication endpoints
 @api_router.post("/auth/register", response_model=dict)
-async def register(user_data: UserCreate, background_tasks: BackgroundTasks):
-    # Check if user already exists
-    existing_user = await db.users.find_one({"email": user_data.email})
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Create user
-    hashed_password = get_password_hash(user_data.password)
-    user_dict = user_data.dict()
-    user_dict.pop('password')
-    user_dict['hashed_password'] = hashed_password
-    user_dict['id'] = str(uuid.uuid4())
-    user_dict['created_at'] = datetime.utcnow()
-    
-    await db.users.insert_one(user_dict)
-    
-    # Create caregiver profile if role is caregiver
-    if user_data.role == UserRole.CAREGIVER:
-        caregiver_profile = {
-            "user_id": user_dict['id'],
-            "bio": "",
-            "experience_years": 0,
-            "certifications": [],
-            "portfolio_images": [],
-            "availability": {},
-            "rating": 0.0,
-            "total_reviews": 0,
-            "is_background_verified": False,
-            "insurance_info": None,
-            "created_at": datetime.utcnow()
-        }
-        await db.caregiver_profiles.insert_one(caregiver_profile)
-    
-    # Send welcome email
-    background_tasks.add_task(
-        send_email,
-        user_data.email,
-        "Welcome to PetBnB!",
-        f"<h1>Welcome {user_data.full_name}!</h1><p>Thanks for joining PetBnB. We're excited to have you on board!</p>"
-    )
-    
-    access_token = create_access_token(data={"sub": user_data.email})
-    return {"access_token": access_token, "token_type": "bearer", "user_id": user_dict['id']}
-
-@api_router.post("/auth/login", response_model=dict)
-async def login(user_credentials: UserLogin):
-    user = await db.users.find_one({"email": user_credentials.email})
-    if not user or not verify_password(user_credentials.password, user["hashed_password"]):
-        raise HTTPException(status_code=401, detail="Incorrect email or password")
-    
-    access_token = create_access_token(data={"sub": user_credentials.email})
-    return {"access_token": access_token, "token_type": "bearer", "user_id": user["id"]}
-
-@api_router.get("/auth/me", response_model=User)
-async def get_current_user_info(current_user: User = Depends(get_current_user)):
-    return current_user
-
-# Pet management endpoints
-@api_router.post("/pets", response_model=Pet)
-async def create_pet(pet_data: PetCreate, current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.PET_OWNER:
-        raise HTTPException(status_code=403, detail="Only pet owners can create pets")
-    
-    pet_dict = pet_data.dict()
-    pet_dict['id'] = str(uuid.uuid4())
-    pet_dict['owner_id'] = current_user.id
-    pet_dict['created_at'] = datetime.utcnow()
-    
-    await db.pets.insert_one(pet_dict)
-    return Pet(**pet_dict)
-
-@api_router.get("/pets", response_model=List[Pet])
-async def get_user_pets(current_user: User = Depends(get_current_user)):
-    pets = await db.pets.find({"owner_id": current_user.id}).to_list(100)
-    return [Pet(**pet) for pet in pets]
-
-@api_router.get("/pets/{pet_id}", response_model=Pet)
-async def get_pet(pet_id: str, current_user: User = Depends(get_current_user)):
-    pet = await db.pets.find_one({"id": pet_id, "owner_id": current_user.id})
-    if not pet:
-        raise HTTPException(status_code=404, detail="Pet not found")
-    return Pet(**pet)
-
-# Caregiver service endpoints
-@api_router.post("/caregiver/services", response_model=CaregiverService)
-async def create_service(service_data: CaregiverServiceCreate, current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.CAREGIVER:
-        raise HTTPException(status_code=403, detail="Only caregivers can create services")
-    
-    service_dict = service_data.dict()
-    service_dict['id'] = str(uuid.uuid4())
-    service_dict['caregiver_id'] = current_user.id
-    service_dict['created_at'] = datetime.utcnow()
-    
-    await db.caregiver_services.insert_one(service_dict)
-    return CaregiverService(**service_dict)
-
-@api_router.get("/caregiver/services", response_model=List[CaregiverService])
-async def get_caregiver_services(current_user: User = Depends(get_current_user)):
-    services = await db.caregiver_services.find({"caregiver_id": current_user.id}).to_list(100)
-    return [CaregiverService(**service) for service in services]
-
-@api_router.post("/search/location", response_model=List[dict])
-async def search_caregivers_by_location(search_params: LocationSearch):
-    # Find caregivers within radius
-    caregivers = []
-    
-    # Get all caregiver services
-    services = await db.caregiver_services.find({"is_active": True}).to_list(1000)
-    
-    for service in services:
-        # Get caregiver user info
-        caregiver = await db.users.find_one({"id": service["caregiver_id"]})
-        if not caregiver or not caregiver.get("latitude") or not caregiver.get("longitude"):
-            continue
+async def register(user_data: UserCreate, background_tasks: BackgroundTasks, db=Depends(get_db_client)):
+    try:
+        # Check if user already exists
+        existing_user = await db.table("users").select("*").eq("email", user_data.email).execute()
+        if existing_user.data:
+            raise HTTPException(status_code=400, detail="Email already registered")
         
-        # Calculate distance
-        distance = calculate_distance(
-            search_params.latitude, search_params.longitude,
-            caregiver["latitude"], caregiver["longitude"]
+        # Create user
+        hashed_password = get_password_hash(user_data.password)
+        user_dict = user_data.dict()
+        user_dict.pop('password')
+        user_dict['password_hash'] = hashed_password
+        user_dict['id'] = str(uuid.uuid4())
+        user_dict['created_at'] = datetime.utcnow().isoformat()
+        
+        result = await db.table("users").insert(user_dict).execute()
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to create user")
+        
+        created_user = result.data[0]
+        
+        # Create caregiver profile if role is caregiver
+        if user_data.user_type == "caregiver":
+            caregiver_profile = {
+                "id": str(uuid.uuid4()),
+                "user_id": created_user['id'],
+                "bio": "",
+                "experience_years": 0,
+                "certifications": {},
+                "portfolio_images": [],
+                "availability_schedule": {},
+                "rating": 0.0,
+                "total_reviews": 0,
+                "background_check_verified": False,
+                "insurance_info": None,
+                "created_at": datetime.utcnow().isoformat()
+            }
+            await db.table("caregiver_profiles").insert(caregiver_profile).execute()
+        
+        # Send welcome email
+        background_tasks.add_task(
+            send_email,
+            user_data.email,
+            "Welcome to PetBnB!",
+            f"<h1>Welcome {user_data.first_name}!</h1><p>Thanks for joining PetBnB. We're excited to have you on board!</p>"
         )
         
-        if distance <= search_params.radius:
-            # Apply filters
-            if search_params.service_type and service["service_type"] != search_params.service_type:
-                continue
-            if search_params.max_price and service["base_price"] > search_params.max_price:
-                continue
-            
+        access_token = create_access_token(data={"sub": user_data.email, "user_id": created_user['id'], "user_type": user_data.user_type})
+        return {"access_token": access_token, "token_type": "bearer", "user_id": created_user['id']}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Registration error: {e}")
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+@api_router.post("/auth/login", response_model=dict)
+async def login(user_credentials: UserLogin, db=Depends(get_db_client)):
+    try:
+        result = await db.table("users").select("*").eq("email", user_credentials.email).execute()
+        if not result.data:
+            raise HTTPException(status_code=401, detail="Incorrect email or password")
+        
+        user = result.data[0]
+        if not verify_password(user_credentials.password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="Incorrect email or password")
+        
+        access_token = create_access_token(data={"sub": user_credentials.email, "user_id": user["id"], "user_type": user["user_type"]})
+        return {"access_token": access_token, "token_type": "bearer", "user_id": user["id"]}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        raise HTTPException(status_code=500, detail="Login failed")
+
+@api_router.get("/auth/me", response_model=UserResponse)
+async def get_current_user_info(current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    try:
+        result = await db.table("users").select("*").eq("id", current_user["user_id"]).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user_data = result.data[0]
+        return UserResponse(**user_data)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get current user error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get user info")
+
+# Pet management endpoints
+@api_router.post("/pets", response_model=PetResponse)
+async def create_pet(pet_data: PetCreate, current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    try:
+        if current_user.get("user_type") != "pet_owner":
+            raise HTTPException(status_code=403, detail="Only pet owners can create pets")
+        
+        pet_dict = pet_data.dict()
+        pet_dict['id'] = str(uuid.uuid4())
+        pet_dict['owner_id'] = str(pet_dict['owner_id'])
+        pet_dict['created_at'] = datetime.utcnow().isoformat()
+        
+        result = await db.table("pets").insert(pet_dict).execute()
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to create pet")
+        
+        return PetResponse(**result.data[0])
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create pet error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create pet")
+
+@api_router.get("/pets", response_model=List[PetResponse])
+async def get_user_pets(current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    try:
+        result = await db.table("pets").select("*").eq("owner_id", current_user["user_id"]).eq("is_active", True).execute()
+        pets = result.data or []
+        return [PetResponse(**pet) for pet in pets]
+        
+    except Exception as e:
+        logger.error(f"Get pets error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get pets")
+
+@api_router.get("/pets/{pet_id}", response_model=PetResponse)
+async def get_pet(pet_id: str, current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    try:
+        result = await db.table("pets").select("*").eq("id", pet_id).eq("owner_id", current_user["user_id"]).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Pet not found")
+        
+        return PetResponse(**result.data[0])
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get pet error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get pet")
+
+# Caregiver service endpoints
+@api_router.post("/caregiver/services", response_model=CaregiverServiceResponse)
+async def create_service(service_data: CaregiverServiceCreate, current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    try:
+        if current_user.get("user_type") != "caregiver":
+            raise HTTPException(status_code=403, detail="Only caregivers can create services")
+        
+        service_dict = service_data.dict()
+        service_dict['id'] = str(uuid.uuid4())
+        service_dict['caregiver_id'] = str(service_dict['caregiver_id'])
+        service_dict['created_at'] = datetime.utcnow().isoformat()
+        
+        result = await db.table("caregiver_services").insert(service_dict).execute()
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to create service")
+        
+        return CaregiverServiceResponse(**result.data[0])
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create service error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create service")
+
+@api_router.get("/caregiver/services", response_model=List[CaregiverServiceResponse])
+async def get_caregiver_services(current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    try:
+        # Get caregiver profile first
+        profile_result = await db.table("caregiver_profiles").select("id").eq("user_id", current_user["user_id"]).execute()
+        if not profile_result.data:
+            return []
+        
+        caregiver_id = profile_result.data[0]["id"]
+        result = await db.table("caregiver_services").select("*").eq("caregiver_id", caregiver_id).execute()
+        services = result.data or []
+        return [CaregiverServiceResponse(**service) for service in services]
+        
+    except Exception as e:
+        logger.error(f"Get caregiver services error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get services")
+
+@api_router.post("/search/location", response_model=List[dict])
+async def search_caregivers_by_location(search_params: LocationSearch, db=Depends(get_db_client)):
+    try:
+        # Get all active caregiver services
+        services_result = await db.table("caregiver_services").select("*").eq("is_active", True).execute()
+        services = services_result.data or []
+        
+        caregivers = []
+        
+        for service in services:
             # Get caregiver profile
-            profile = await db.caregiver_profiles.find_one({"user_id": caregiver["id"]})
-            if search_params.min_rating and profile and profile.get("rating", 0) < search_params.min_rating:
+            profile_result = await db.table("caregiver_profiles").select("*").eq("id", service["caregiver_id"]).execute()
+            if not profile_result.data:
+                continue
+            profile = profile_result.data[0]
+            
+            # Get caregiver user info
+            user_result = await db.table("users").select("*").eq("id", profile["user_id"]).execute()
+            if not user_result.data:
+                continue
+            caregiver = user_result.data[0]
+            
+            if not caregiver.get("latitude") or not caregiver.get("longitude"):
                 continue
             
-            caregivers.append({
-                "caregiver": caregiver,
-                "service": service,
-                "profile": profile,
-                "distance": round(distance, 2)
-            })
-    
-    # Sort by distance
-    caregivers.sort(key=lambda x: x["distance"])
-    return caregivers[:50]  # Limit to 50 results
+            # Calculate distance
+            distance = calculate_distance(
+                search_params.latitude, search_params.longitude,
+                caregiver["latitude"], caregiver["longitude"]
+            )
+            
+            if distance <= search_params.radius:
+                # Apply filters
+                if search_params.service_type and service["service_type"] != search_params.service_type:
+                    continue
+                if search_params.max_price and service["base_price"] > search_params.max_price:
+                    continue
+                if search_params.min_rating and profile.get("rating", 0) < search_params.min_rating:
+                    continue
+                
+                caregivers.append({
+                    "caregiver": caregiver,
+                    "service": service,
+                    "profile": profile,
+                    "distance": round(distance, 2)
+                })
+        
+        # Sort by distance
+        caregivers.sort(key=lambda x: x["distance"])
+        return caregivers[:50]  # Limit to 50 results
+        
+    except Exception as e:
+        logger.error(f"Location search error: {e}")
+        raise HTTPException(status_code=500, detail="Search failed")
 
 # Booking endpoints
-@api_router.post("/bookings", response_model=Booking)
-async def create_booking(booking_data: BookingCreate, current_user: User = Depends(get_current_user)):
-    if current_user.role != UserRole.PET_OWNER:
-        raise HTTPException(status_code=403, detail="Only pet owners can create bookings")
-    
-    # Get service details
-    service = await db.caregiver_services.find_one({"id": booking_data.service_id})
-    if not service:
-        raise HTTPException(status_code=404, detail="Service not found")
-    
-    booking_dict = booking_data.dict()
-    booking_dict['id'] = str(uuid.uuid4())
-    booking_dict['pet_owner_id'] = current_user.id
-    booking_dict['caregiver_id'] = service['caregiver_id']
-    booking_dict['created_at'] = datetime.utcnow()
-    
-    await db.bookings.insert_one(booking_dict)
-    return Booking(**booking_dict)
+@api_router.post("/bookings", response_model=BookingResponse)
+async def create_booking(booking_data: BookingCreate, current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    try:
+        if current_user.get("user_type") != "pet_owner":
+            raise HTTPException(status_code=403, detail="Only pet owners can create bookings")
+        
+        # Get service details
+        service_result = await db.table("caregiver_services").select("*").eq("id", str(booking_data.service_id)).execute()
+        if not service_result.data:
+            raise HTTPException(status_code=404, detail="Service not found")
+        
+        service = service_result.data[0]
+        
+        booking_dict = booking_data.dict()
+        booking_dict['id'] = str(uuid.uuid4())
+        booking_dict['pet_owner_id'] = str(booking_dict['pet_owner_id'])
+        booking_dict['caregiver_id'] = str(booking_dict['caregiver_id'])
+        booking_dict['pet_id'] = str(booking_dict['pet_id'])
+        booking_dict['service_id'] = str(booking_dict['service_id'])
+        booking_dict['created_at'] = datetime.utcnow().isoformat()
+        
+        result = await db.table("bookings").insert(booking_dict).execute()
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to create booking")
+        
+        return BookingResponse(**result.data[0])
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create booking error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create booking")
 
-@api_router.get("/bookings", response_model=List[Booking])
-async def get_user_bookings(current_user: User = Depends(get_current_user)):
-    if current_user.role == UserRole.PET_OWNER:
-        bookings = await db.bookings.find({"pet_owner_id": current_user.id}).to_list(100)
-    elif current_user.role == UserRole.CAREGIVER:
-        bookings = await db.bookings.find({"caregiver_id": current_user.id}).to_list(100)
-    else:
-        bookings = []
-    
-    return [Booking(**booking) for booking in bookings]
+@api_router.get("/bookings", response_model=List[BookingResponse])
+async def get_user_bookings(current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    try:
+        if current_user.get("user_type") == "pet_owner":
+            result = await db.table("bookings").select("*").eq("pet_owner_id", current_user["user_id"]).execute()
+        elif current_user.get("user_type") == "caregiver":
+            # Get caregiver profile first
+            profile_result = await db.table("caregiver_profiles").select("id").eq("user_id", current_user["user_id"]).execute()
+            if not profile_result.data:
+                return []
+            caregiver_id = profile_result.data[0]["id"]
+            result = await db.table("bookings").select("*").eq("caregiver_id", caregiver_id).execute()
+        else:
+            return []
+        
+        bookings = result.data or []
+        return [BookingResponse(**booking) for booking in bookings]
+        
+    except Exception as e:
+        logger.error(f"Get bookings error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get bookings")
 
 # Payment endpoints
 @api_router.post("/payments/create-intent")
-async def create_payment_intent(booking_id: str, current_user: User = Depends(get_current_user)):
-    booking = await db.bookings.find_one({"id": booking_id, "pet_owner_id": current_user.id})
-    if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
-    
+async def create_payment_intent(booking_id: str, current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
     try:
+        result = await db.table("bookings").select("*").eq("id", booking_id).eq("pet_owner_id", current_user["user_id"]).execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        
+        booking = result.data[0]
+        
         # Create Stripe payment intent
         intent = stripe.PaymentIntent.create(
             amount=int(booking["total_amount"] * 100),  # Amount in cents
@@ -478,118 +439,155 @@ async def create_payment_intent(booking_id: str, current_user: User = Depends(ge
         )
         
         return {"client_secret": intent.client_secret}
+        
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Payment intent error: {e}")
         raise HTTPException(status_code=400, detail=f"Payment error: {str(e)}")
 
 # File upload endpoint
 @api_router.post("/upload")
-async def upload_file(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
+async def upload_file(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     try:
         # Upload to Cloudinary
         result = cloudinary.uploader.upload(
             file.file,
-            folder=f"petbnb/{current_user.role}/{current_user.id}",
+            folder=f"petbnb/{current_user.get('user_type')}/{current_user['user_id']}",
             resource_type="auto"
         )
         
         return {"url": result["secure_url"], "public_id": result["public_id"]}
+        
     except Exception as e:
+        logger.error(f"Upload error: {e}")
         raise HTTPException(status_code=400, detail=f"Upload error: {str(e)}")
 
 # Review endpoints
-@api_router.post("/reviews", response_model=Review)
-async def create_review(review_data: dict, current_user: User = Depends(get_current_user)):
-    # Verify booking exists and user is part of it
-    booking = await db.bookings.find_one({
-        "id": review_data["booking_id"],
-        "$or": [
-            {"pet_owner_id": current_user.id},
-            {"caregiver_id": current_user.id}
-        ]
-    })
-    
-    if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
-    
-    if booking["status"] != BookingStatus.COMPLETED:
-        raise HTTPException(status_code=400, detail="Can only review completed bookings")
-    
-    review_dict = {
-        "id": str(uuid.uuid4()),
-        "booking_id": review_data["booking_id"],
-        "reviewer_id": current_user.id,
-        "reviewee_id": review_data["reviewee_id"],
-        "rating": review_data["rating"],
-        "comment": review_data.get("comment"),
-        "created_at": datetime.utcnow()
-    }
-    
-    await db.reviews.insert_one(review_dict)
-    
-    # Update caregiver rating
-    if review_data["reviewee_id"] != current_user.id:
-        await update_caregiver_rating(review_data["reviewee_id"])
-    
-    return Review(**review_dict)
+@api_router.post("/reviews", response_model=ReviewResponse)
+async def create_review(review_data: dict, current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    try:
+        # Verify booking exists and user is part of it
+        booking_result = await db.table("bookings").select("*").eq("id", review_data["booking_id"]).execute()
+        if not booking_result.data:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        
+        booking = booking_result.data[0]
+        if booking["pet_owner_id"] != current_user["user_id"] and booking["caregiver_id"] != current_user["user_id"]:
+            raise HTTPException(status_code=403, detail="Not authorized to review this booking")
+        
+        if booking["booking_status"] != "completed":
+            raise HTTPException(status_code=400, detail="Can only review completed bookings")
+        
+        review_dict = {
+            "id": str(uuid.uuid4()),
+            "booking_id": review_data["booking_id"],
+            "reviewer_id": current_user["user_id"],
+            "reviewee_id": review_data["reviewee_id"],
+            "caregiver_id": review_data["caregiver_id"],
+            "rating": review_data["rating"],
+            "comment": review_data.get("comment"),
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        result = await db.table("reviews").insert(review_dict).execute()
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to create review")
+        
+        # Update caregiver rating
+        await update_caregiver_rating(review_data["reviewee_id"], db)
+        
+        return ReviewResponse(**result.data[0])
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create review error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create review")
 
-async def update_caregiver_rating(caregiver_id: str):
-    # Calculate new rating
-    reviews = await db.reviews.find({"reviewee_id": caregiver_id}).to_list(1000)
-    if reviews:
-        avg_rating = sum(review["rating"] for review in reviews) / len(reviews)
-        await db.caregiver_profiles.update_one(
-            {"user_id": caregiver_id},
-            {"$set": {"rating": round(avg_rating, 1), "total_reviews": len(reviews)}}
-        )
+async def update_caregiver_rating(caregiver_id: str, db):
+    """Calculate and update caregiver rating"""
+    try:
+        # Calculate new rating
+        reviews_result = await db.table("reviews").select("rating").eq("reviewee_id", caregiver_id).execute()
+        reviews = reviews_result.data or []
+        
+        if reviews:
+            avg_rating = sum(review["rating"] for review in reviews) / len(reviews)
+            await db.table("caregiver_profiles").update({
+                "rating": round(avg_rating, 1),
+                "total_reviews": len(reviews)
+            }).eq("user_id", caregiver_id).execute()
+    except Exception as e:
+        logger.error(f"Update rating error: {e}")
 
 # Message endpoints
-@api_router.post("/messages", response_model=Message)
-async def send_message(message_data: dict, current_user: User = Depends(get_current_user)):
-    # Verify booking exists and user is part of it
-    booking = await db.bookings.find_one({
-        "id": message_data["booking_id"],
-        "$or": [
-            {"pet_owner_id": current_user.id},
-            {"caregiver_id": current_user.id}
-        ]
-    })
-    
-    if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
-    
-    message_dict = {
-        "id": str(uuid.uuid4()),
-        "booking_id": message_data["booking_id"],
-        "sender_id": current_user.id,
-        "receiver_id": message_data["receiver_id"],
-        "content": message_data["content"],
-        "message_type": message_data.get("message_type", "text"),
-        "created_at": datetime.utcnow()
-    }
-    
-    await db.messages.insert_one(message_dict)
-    return Message(**message_dict)
+@api_router.post("/messages", response_model=MessageResponse)
+async def send_message(message_data: dict, current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    try:
+        # Verify booking exists and user is part of it
+        if message_data.get("booking_id"):
+            booking_result = await db.table("bookings").select("*").eq("id", message_data["booking_id"]).execute()
+            if not booking_result.data:
+                raise HTTPException(status_code=404, detail="Booking not found")
+            
+            booking = booking_result.data[0]
+            if booking["pet_owner_id"] != current_user["user_id"] and booking["caregiver_id"] != current_user["user_id"]:
+                raise HTTPException(status_code=403, detail="Not authorized to message in this booking")
+        
+        message_dict = {
+            "id": str(uuid.uuid4()),
+            "booking_id": message_data.get("booking_id"),
+            "sender_id": current_user["user_id"],
+            "receiver_id": message_data["receiver_id"],
+            "content": message_data["content"],
+            "message_type": message_data.get("message_type", "text"),
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        result = await db.table("messages").insert(message_dict).execute()
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to send message")
+        
+        return MessageResponse(**result.data[0])
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Send message error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send message")
 
-@api_router.get("/messages/{booking_id}", response_model=List[Message])
-async def get_booking_messages(booking_id: str, current_user: User = Depends(get_current_user)):
-    # Verify user is part of booking
-    booking = await db.bookings.find_one({
-        "id": booking_id,
-        "$or": [
-            {"pet_owner_id": current_user.id},
-            {"caregiver_id": current_user.id}
-        ]
-    })
-    
-    if not booking:
-        raise HTTPException(status_code=404, detail="Booking not found")
-    
-    messages = await db.messages.find({"booking_id": booking_id}).sort("created_at", 1).to_list(1000)
-    return [Message(**message) for message in messages]
+@api_router.get("/messages/{booking_id}", response_model=List[MessageResponse])
+async def get_booking_messages(booking_id: str, current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    try:
+        # Verify user is part of booking
+        booking_result = await db.table("bookings").select("*").eq("id", booking_id).execute()
+        if not booking_result.data:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        
+        booking = booking_result.data[0]
+        if booking["pet_owner_id"] != current_user["user_id"] and booking["caregiver_id"] != current_user["user_id"]:
+            raise HTTPException(status_code=403, detail="Not authorized to view these messages")
+        
+        result = await db.table("messages").select("*").eq("booking_id", booking_id).order("created_at").execute()
+        messages = result.data or []
+        return [MessageResponse(**message) for message in messages]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get messages error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get messages")
 
 # Include router
 app.include_router(api_router)
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+# Root endpoint
+@app.get("/")
+async def root():
+    return {"message": "PetBnB API v2.0 - Supabase PostgreSQL Backend", "status": "running"}
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "database": "supabase", "timestamp": datetime.utcnow().isoformat()}
