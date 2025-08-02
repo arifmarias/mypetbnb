@@ -34,7 +34,7 @@ const MessagesScreen = ({ navigation }) => {
       id: '2',
       contactName: 'Michael Chen',
       contactImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80',
-      lastMessage: 'Perfect! I'll be there at 3 PM for the walk.',
+      lastMessage: 'Perfect! I will be there at 3 PM for the walk.',
       timestamp: '1 hour ago',
       unreadCount: 0,
       bookingId: 'booking_2',
