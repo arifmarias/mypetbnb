@@ -168,7 +168,7 @@ const AuthModal = ({ mode, onClose, onSwitchMode }) => {
                   onClick={() => handleInputChange({ target: { name: 'role', value: 'caregiver' } })}
                   className={`p-4 border-2 rounded-xl text-center space-y-2 transition-all ${
                     formData.role === 'caregiver'
-                      ? 'border-purple-500 bg-purple-50 text-purple-700'
+                      ? 'border-red-400 bg-red-50 text-red-700'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
