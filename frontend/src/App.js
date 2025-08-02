@@ -105,53 +105,55 @@ function App() {
 
   return (
     <AuthContext.Provider value={{ user, login, register, logout, openAuth }}>
-      <Router>
-        <div className="App min-h-screen flex flex-col bg-gray-50">
-          <Header />
-          
-          <main className="flex-1">
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/search" element={<SearchResults />} />
-              
-              {/* Protected Routes */}
-              <Route 
-                path="/dashboard" 
-                element={
-                  user ? (
-                    user.role === 'pet_owner' ? <PetOwnerDashboard /> : <CaregiverDashboard />
-                  ) : (
-                    <Navigate to="/" />
-                  )
-                } 
-              />
-              <Route 
-                path="/booking/:serviceId" 
-                element={user ? <BookingFlow /> : <Navigate to="/" />} 
-              />
-              <Route 
-                path="/messages" 
-                element={user ? <MessagingCenter /> : <Navigate to="/" />} 
-              />
-              <Route 
-                path="/profile" 
-                element={user ? <UserProfile /> : <Navigate to="/" />} 
-              />
-            </Routes>
-          </main>
+      <ToastProvider>
+        <Router>
+          <div className="App min-h-screen flex flex-col bg-gray-50">
+            <Header />
+            
+            <main className="flex-1">
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/search" element={<SearchResults />} />
+                
+                {/* Protected Routes */}
+                <Route 
+                  path="/dashboard" 
+                  element={
+                    user ? (
+                      user.role === 'pet_owner' ? <PetOwnerDashboard /> : <CaregiverDashboard />
+                    ) : (
+                      <Navigate to="/" />
+                    )
+                  } 
+                />
+                <Route 
+                  path="/booking/:serviceId" 
+                  element={user ? <BookingFlow /> : <Navigate to="/" />} 
+                />
+                <Route 
+                  path="/messages" 
+                  element={user ? <MessagingCenter /> : <Navigate to="/" />} 
+                />
+                <Route 
+                  path="/profile" 
+                  element={user ? <UserProfile /> : <Navigate to="/" />} 
+                />
+              </Routes>
+            </main>
 
-          <Footer />
+            <Footer />
 
-          {/* Auth Modal */}
-          {showAuthModal && (
-            <AuthModal 
-              mode={authMode}
-              onClose={() => setShowAuthModal(false)}
-              onSwitchMode={(mode) => setAuthMode(mode)}
-            />
-          )}
-        </div>
-      </Router>
+            {/* Auth Modal */}
+            {showAuthModal && (
+              <AuthModal 
+                mode={authMode}
+                onClose={() => setShowAuthModal(false)}
+                onSwitchMode={(mode) => setAuthMode(mode)}
+              />
+            )}
+          </div>
+        </Router>
+      </ToastProvider>
     </AuthContext.Provider>
   );
 }
