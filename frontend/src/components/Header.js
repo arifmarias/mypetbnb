@@ -25,10 +25,13 @@ const Header = () => {
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2 group">
             <div className="relative">
-              <Heart className="h-8 w-8 text-purple-600 group-hover:text-purple-700 transition-colors duration-200" fill="currentColor" />
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-pink-500 rounded-full animate-pulse"></div>
+              <img 
+                src="https://customer-assets.emergentagent.com/job_petcare-2/artifacts/rp3sqb5r_logo.webp" 
+                alt="PetBnB" 
+                className="h-10 w-10 object-contain group-hover:scale-110 transition-transform duration-200" 
+              />
             </div>
-            <span className="text-2xl font-bold gradient-primary bg-clip-text text-transparent">
+            <span className="text-2xl font-bold" style={{ color: '#FF5A5F' }}>
               PetBnB
             </span>
           </Link>
