@@ -239,7 +239,10 @@ const PetOwnerDashboard = ({ navigation }) => {
                   </TouchableOpacity>
                 ))}
                 
-                <TouchableOpacity style={styles.addPetCard}>
+                <TouchableOpacity 
+                  style={styles.addPetCard}
+                  onPress={() => navigation.navigate('AddPet')}
+                >
                   <View style={styles.addPetIcon}>
                     <Ionicons name="add" size={32} color="#FF5A5F" />
                   </View>
