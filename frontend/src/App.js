@@ -17,6 +17,7 @@ import UserProfile from './components/UserProfile';
 
 // Context
 import { AuthContext } from './context/AuthContext';
+import { ToastProvider } from './components/Toast';
 
 // Configure axios defaults
 axios.defaults.baseURL = process.env.REACT_APP_BACKEND_URL;
