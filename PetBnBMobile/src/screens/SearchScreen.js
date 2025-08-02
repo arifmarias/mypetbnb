@@ -16,6 +16,7 @@ const SearchScreen = ({ route, navigation }) => {
   const [searchQuery, setSearchQuery] = useState(route?.params?.query || '');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
 
   // Mock data for demonstration
   const mockResults = [
