@@ -108,6 +108,25 @@ function AuthNavigator() {
 function AppNavigator() {
   const { user, loading } = useAuth();
   
+  // Initialize notifications when app starts
+  useEffect(() => {
+    if (!loading) {
+      initializeNotifications();
+    }
+  }, [loading]);
+
+  const initializeNotifications = async () => {
+    try {
+      const pushToken = await notificationService.initialize();
+      if (pushToken) {
+        console.log('Push notifications initialized with token:', pushToken);
+        // In real app, send this token to your backend to store for the user
+      }
+    } catch (error) {
+      console.error('Failed to initialize notifications:', error);
+    }
+  };
+  
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FF5A5F' }}>
@@ -124,6 +143,7 @@ function AppNavigator() {
           <Stack.Screen name="Booking" component={BookingScreen} />
           <Stack.Screen name="PetDetails" component={PetDetailsScreen} />
           <Stack.Screen name="ServiceDetails" component={ServiceDetailsScreen} />
+          <Stack.Screen name="AddPet" component={AddPetScreen} />
         </>
       ) : (
         <Stack.Screen name="Auth" component={AuthNavigator} />
