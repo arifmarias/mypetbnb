@@ -303,10 +303,10 @@ class PetBnBAPITester:
             return self.log_test("Get Current User", False, "No pet owner token available")
         
         success, response = self.make_request('GET', '/api/auth/me', token=self.pet_owner_token)
-        user_data_valid = success and 'email' in response and 'role' in response
+        user_data_valid = success and 'email' in response and 'user_type' in response
         
         return self.log_test("Get Current User", user_data_valid, 
-                           f"User role: {response.get('role', 'N/A')}")
+                           f"User type: {response.get('user_type', 'N/A')}")
 
     def test_pet_management(self):
         """Test pet creation and retrieval"""
