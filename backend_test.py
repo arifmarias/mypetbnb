@@ -86,9 +86,158 @@ class PetBnBAPITester:
     def test_health_check(self):
         """Test if backend server is running"""
         print("\n🔍 Testing Backend Health Check...")
-        success, response = self.make_request('GET', '/api/auth/me', expected_status=403)  # Should return 403 without auth
-        server_responding = success and response.get('detail') == 'Not authenticated'
-        return self.log_test("Backend Server Health", server_responding, f"Server responding correctly")
+        
+        # Test root endpoint first
+        success, response = self.make_request('GET', '/', expected_status=200)
+        root_success = self.log_test("Root Endpoint", success, f"Response: {response.get('message', 'N/A')}")
+        
+        # Test health endpoint
+        success, response = self.make_request('GET', '/health', expected_status=200)
+        health_success = self.log_test("Health Endpoint", success, f"Database: {response.get('database', 'N/A')}")
+        
+        # Test auth endpoint without token (should return 403)
+        success, response = self.make_request('GET', '/api/auth/me', expected_status=403)
+        auth_endpoint_exists = success and 'detail' in response
+        auth_success = self.log_test("Auth Endpoint Exists", auth_endpoint_exists, f"Expected 403 response received")
+        
+        return root_success and health_success and auth_success
+
+    def test_database_tables_exist(self):
+        """Test if database tables exist by attempting operations"""
+        print("\n🔍 Testing Database Tables Existence...")
+        
+        # Try to register a user - this will fail if users table doesn't exist
+        timestamp = datetime.now().strftime("%H%M%S")
+        test_user_data = {
+            "email": f"tabletest_{timestamp}@test.com",
+            "password": "TestPass123!",
+            "first_name": "Table",
+            "last_name": "Test",
+            "phone": "+65 9123 4567",
+            "user_type": "pet_owner"
+        }
+        
+        success, response = self.make_request('POST', '/api/auth/register', test_user_data, expected_status=200)
+        
+        if success:
+            return self.log_test("Database Tables", True, "Users table exists and registration works")
+        else:
+            error_detail = response.get('detail', str(response))
+            if 'relation' in error_detail.lower() and 'does not exist' in error_detail.lower():
+                return self.log_test("Database Tables", False, f"Tables missing: {error_detail}")
+            elif 'table' in error_detail.lower() and 'exist' in error_detail.lower():
+                return self.log_test("Database Tables", False, f"Tables missing: {error_detail}")
+            else:
+                return self.log_test("Database Tables", False, f"Unknown error: {error_detail}")
+
+    def test_demo_account_login(self):
+        """Test login with demo accounts"""
+        print("\n🔍 Testing Demo Account Login...")
+        
+        demo_accounts = [
+            {"email": "john.petowner@demo.com", "password": "TestPassword123!", "role": "pet_owner"},
+            {"email": "sarah.caregiver@demo.com", "password": "TestPassword123!", "role": "caregiver"}
+        ]
+        
+        login_results = []
+        
+        for account in demo_accounts:
+            login_data = {
+                "email": account["email"],
+                "password": account["password"]
+            }
+            
+            success, response = self.make_request('POST', '/api/auth/login', login_data, expected_status=200)
+            
+            if success and 'access_token' in response:
+                # Store token for further testing
+                if account["role"] == "pet_owner":
+                    self.pet_owner_token = response['access_token']
+                    self.pet_owner_id = response['user_id']
+                else:
+                    self.caregiver_token = response['access_token']
+                    self.caregiver_id = response['user_id']
+                
+                login_results.append(self.log_test(f"Demo Login ({account['role']})", True, 
+                                                 f"Token received for {account['email']}"))
+            else:
+                error_detail = response.get('detail', str(response))
+                login_results.append(self.log_test(f"Demo Login ({account['role']})", False, 
+                                                 f"Failed for {account['email']}: {error_detail}"))
+        
+        return all(login_results)
+
+    def test_token_validation_detailed(self):
+        """Test token validation in detail"""
+        print("\n🔍 Testing Token Validation...")
+        
+        if not self.pet_owner_token:
+            return self.log_test("Token Validation", False, "No token available for testing")
+        
+        # Test with valid token
+        success, response = self.make_request('GET', '/api/auth/me', token=self.pet_owner_token, expected_status=200)
+        
+        if success:
+            valid_token_test = self.log_test("Valid Token Test", True, 
+                                           f"User: {response.get('email', 'N/A')}, Role: {response.get('user_type', 'N/A')}")
+        else:
+            error_detail = response.get('detail', str(response))
+            if 'expired' in error_detail.lower():
+                valid_token_test = self.log_test("Valid Token Test", False, f"Token expired: {error_detail}")
+            elif 'invalid' in error_detail.lower():
+                valid_token_test = self.log_test("Valid Token Test", False, f"Token invalid: {error_detail}")
+            else:
+                valid_token_test = self.log_test("Valid Token Test", False, f"Auth failed: {error_detail}")
+        
+        # Test with invalid token
+        success, response = self.make_request('GET', '/api/auth/me', token="invalid_token_123", expected_status=401)
+        invalid_token_test = self.log_test("Invalid Token Rejection", success, 
+                                         f"Correctly rejected invalid token")
+        
+        # Test with expired token format (but not actually expired)
+        success, response = self.make_request('GET', '/api/auth/me', token="", expected_status=403)
+        empty_token_test = self.log_test("Empty Token Rejection", success, 
+                                       f"Correctly rejected empty token")
+        
+        return valid_token_test and invalid_token_test and empty_token_test
+
+    def test_jwt_token_creation(self):
+        """Test JWT token creation and structure"""
+        print("\n🔍 Testing JWT Token Creation...")
+        
+        # Create a new user to get a fresh token
+        timestamp = datetime.now().strftime("%H%M%S")
+        user_data = {
+            "email": f"jwttest_{timestamp}@test.com",
+            "password": "TestPass123!",
+            "first_name": "JWT",
+            "last_name": "Test",
+            "phone": "+65 9123 4567",
+            "user_type": "pet_owner"
+        }
+        
+        success, response = self.make_request('POST', '/api/auth/register', user_data, expected_status=200)
+        
+        if not success:
+            return self.log_test("JWT Token Creation", False, f"Registration failed: {response.get('detail', 'Unknown error')}")
+        
+        token = response.get('access_token')
+        if not token:
+            return self.log_test("JWT Token Creation", False, "No access token in response")
+        
+        # Verify token structure (JWT should have 3 parts separated by dots)
+        token_parts = token.split('.')
+        structure_valid = len(token_parts) == 3
+        
+        structure_test = self.log_test("JWT Token Structure", structure_valid, 
+                                     f"Token has {len(token_parts)} parts (expected 3)")
+        
+        # Test immediate token usage
+        success, user_response = self.make_request('GET', '/api/auth/me', token=token, expected_status=200)
+        immediate_use_test = self.log_test("Immediate Token Usage", success, 
+                                         f"Token works immediately after creation")
+        
+        return structure_test and immediate_use_test
 
     def test_user_registration(self):
         """Test user registration for both pet owner and caregiver"""
