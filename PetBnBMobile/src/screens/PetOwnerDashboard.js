@@ -217,7 +217,10 @@ const PetOwnerDashboard = ({ navigation }) => {
             <View style={styles.emptyState}>
               <Ionicons name="heart-outline" size={48} color="#E5E5E5" />
               <Text style={styles.emptyStateText}>No pets added yet</Text>
-              <TouchableOpacity style={styles.emptyStateButton}>
+              <TouchableOpacity 
+                style={styles.emptyStateButton}
+                onPress={() => navigation.navigate('AddPet')}
+              >
                 <Text style={styles.emptyStateButtonText}>Add Your First Pet</Text>
               </TouchableOpacity>
             </View>
