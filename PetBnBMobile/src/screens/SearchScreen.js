@@ -229,6 +229,13 @@ const styles = StyleSheet.create({
   resultsList: {
     paddingHorizontal: 20,
   },
+  mapContainer: {
+    flex: 1,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
   resultCard: {
     flexDirection: 'row',
     backgroundColor: 'white',
