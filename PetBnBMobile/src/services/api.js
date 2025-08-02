@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Use your existing backend URL
-const API_BASE_URL = 'https://7bd2a15a-a27c-42f7-962e-182a18f4d2f6.preview.emergentagent.com';
+const API_BASE_URL = 'https://8f2d6284-acf5-4a16-a61e-70911531e1fa.preview.emergentagent.com';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
