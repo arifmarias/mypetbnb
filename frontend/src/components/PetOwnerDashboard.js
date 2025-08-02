@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from './Toast';
+import LoadingSpinner, { PageSkeleton } from './LoadingSpinner';
+import PetCreationModal from './PetCreationModal';
 import { 
   Plus, 
   Edit, 
@@ -16,9 +19,7 @@ import {
   Filter,
   Search,
   Eye
-import LoadingSpinner, { PageSkeleton } from './LoadingSpinner';
-import { useToast } from './Toast';
-import PetCreationModal from './PetCreationModal';
+} from 'lucide-react';
 
 const PetOwnerDashboard = () => {
   const { user } = useAuth();
