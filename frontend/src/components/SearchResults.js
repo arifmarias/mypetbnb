@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
+// Google Maps integration removed for now - to be implemented later
 import { 
   Search, 
   MapPin, 
