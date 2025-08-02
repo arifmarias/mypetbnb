@@ -459,7 +459,7 @@ body {
 .btn:focus,
 .form-input:focus,
 .nav-link:focus {
-  outline: 2px solid #667eea;
+  outline: 2px solid #FF5A5F;
   outline-offset: 2px;
 }
 
