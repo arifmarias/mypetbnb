@@ -22,6 +22,7 @@ import {
 
 const CaregiverDashboard = () => {
   const { user } = useAuth();
+  const toast = useToast();
   const [services, setServices] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [profile, setProfile] = useState(null);
@@ -43,9 +44,15 @@ const CaregiverDashboard = () => {
       setBookings(bookingsResponse.data || []);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
+      toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleServiceCreated = (newService) => {
+    setServices(prev => [...prev, newService]);
+    toast.success('Service created successfully!');
   };
 
   const getStatusColor = (status) => {
