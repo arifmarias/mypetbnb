@@ -267,7 +267,7 @@ class ReviewResponse(ReviewBase, BaseModelWithTimestamps):
 # Message models
 class MessageBase(BaseModel):
     content: str = Field(..., min_length=1)
-    message_type: str = Field(default="text", regex="^(text|image|document)$")
+    message_type: str = Field(default="text", pattern="^(text|image|document)$")
     attachment_url: Optional[str] = None
 
 class MessageCreate(MessageBase):
