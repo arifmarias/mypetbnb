@@ -125,19 +125,36 @@ const SearchScreen = ({ route, navigation }) => {
       <View style={styles.content}>
         <View style={styles.resultsSummary}>
           <Text style={styles.resultsCount}>{results.length} caregivers found</Text>
-          <TouchableOpacity style={styles.mapToggle}>
-            <Ionicons name="map-outline" size={20} color="#FF5A5F" />
-            <Text style={styles.mapToggleText}>Map</Text>
+          <TouchableOpacity 
+            style={styles.mapToggle}
+            onPress={() => setViewMode(viewMode === 'list' ? 'map' : 'list')}
+          >
+            <Ionicons 
+              name={viewMode === 'list' ? 'map-outline' : 'list-outline'} 
+              size={20} 
+              color="#FF5A5F" 
+            />
+            <Text style={styles.mapToggleText}>
+              {viewMode === 'list' ? 'Map' : 'List'}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        <FlatList
-          data={results}
-          keyExtractor={(item) => item.id}
-          renderItem={renderResultItem}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.resultsList}
-        />
+        {viewMode === 'list' ? (
+          <FlatList
+            data={results}
+            keyExtractor={(item) => item.id}
+            renderItem={renderResultItem}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.resultsList}
+          />
+        ) : (
+          <MapView
+            services={results}
+            onServiceSelect={(service) => navigation.navigate('ServiceDetails', { service })}
+            style={styles.mapContainer}
+          />
+        )}
       </View>
     </SafeAreaView>
   );
