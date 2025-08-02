@@ -70,17 +70,17 @@ class NotificationService {
       
       switch (data?.type) {
         case 'booking_confirmed':
-          navigation.navigate('Dashboard');
+          navigation.navigate('MainTabs', { screen: 'Dashboard' });
           break;
         case 'new_message':
-          navigation.navigate('Messages', { conversationId: data.conversationId });
+          navigation.navigate('ChatScreen', { conversationId: data.conversationId });
           break;
         case 'booking_reminder':
           navigation.navigate('Booking', { bookingId: data.bookingId });
           break;
         default:
           // Navigate to home or relevant screen
-          navigation.navigate('Home');
+          navigation.navigate('MainTabs', { screen: 'Home' });
       }
     });
   }
