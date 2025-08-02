@@ -265,26 +265,36 @@ const SearchResults = () => {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="btn btn-secondary"
+              className="btn btn-secondary w-full sm:w-auto"
             >
               <Filter className="h-4 w-4 mr-2" />
-              Filters
+              Filters {caregivers.length > 0 && `(${caregivers.length} results)`}
             </button>
             
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 w-full sm:w-auto justify-center sm:justify-end">
               <span className="text-sm text-gray-600">View:</span>
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-lg ${viewMode === 'grid' ? 'bg-purple-100 text-purple-600' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                <Grid className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('map')}
-                className={`p-2 rounded-lg ${viewMode === 'map' ? 'bg-purple-100 text-purple-600' : 'text-gray-400 hover:text-gray-600'}`}
-              >
-                <MapIcon className="h-4 w-4" />
-              </button>
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                    viewMode === 'grid' 
+                      ? 'bg-white text-red-600 shadow-sm' 
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  <Grid className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode('map')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-all ${
+                    viewMode === 'map' 
+                      ? 'bg-white text-red-600 shadow-sm' 
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  <MapIcon className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
 
