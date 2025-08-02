@@ -225,7 +225,11 @@ const PetOwnerDashboard = ({ navigation }) => {
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={styles.petsContainer}>
                 {myPets.map((pet) => (
-                  <TouchableOpacity key={pet.id} style={styles.petCard}>
+                  <TouchableOpacity 
+                  key={pet.id} 
+                  style={styles.petCard}
+                  onPress={() => navigation.navigate('PetDetails', { petId: pet.id })}
+                >
                     <View style={styles.petAvatar}>
                       <Text style={styles.petAvatarText}>{pet.name.charAt(0)}</Text>
                     </View>
