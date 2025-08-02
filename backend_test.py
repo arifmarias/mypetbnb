@@ -87,7 +87,7 @@ class PetBnBAPITester:
         """Test if backend server is running"""
         print("\n🔍 Testing Backend Health Check...")
         success, response = self.make_request('GET', '/api/auth/me', expected_status=401)  # Should return 401 without auth
-        server_responding = success and 'detail' in response
+        server_responding = success and response.get('detail') == 'Not authenticated'
         return self.log_test("Backend Server Health", server_responding, f"Server responding correctly")
 
     def test_user_registration(self):
