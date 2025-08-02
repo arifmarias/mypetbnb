@@ -494,71 +494,16 @@ const SearchResults = () => {
             </div>
           </>
         ) : (
-          /* Map View */
-          <LoadScript googleMapsApiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}>
-            <div className="card overflow-hidden">
-              <GoogleMap
-                mapContainerStyle={mapContainerStyle}
-                center={userLocation || center}
-                zoom={12}
-              >
-                {/* User Location */}
-                {userLocation && (
-                  <Marker
-                    position={userLocation}
-                    icon={{
-                      url: 'data:image/svg+xml;charset=UTF-8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22%23007bff%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%228%22/%3E%3C/svg%3E',
-                      scaledSize: new window.google.maps.Size(24, 24),
-                    }}
-                  />
-                )}
-
-                {/* Caregiver Markers */}
-                {caregivers.map((result, index) => (
-                  <Marker
-                    key={index}
-                    position={{
-                      lat: result.caregiver.latitude,
-                      lng: result.caregiver.longitude
-                    }}
-                    onClick={() => setSelectedCaregiver(result)}
-                  />
-                ))}
-
-                {/* Info Window */}
-                {selectedCaregiver && (
-                  <InfoWindow
-                    position={{
-                      lat: selectedCaregiver.caregiver.latitude,
-                      lng: selectedCaregiver.caregiver.longitude
-                    }}
-                    onCloseClick={() => setSelectedCaregiver(null)}
-                  >
-                    <div className="max-w-xs p-2">
-                      <h3 className="font-semibold text-gray-800 mb-1">
-                        {selectedCaregiver.service.title}
-                      </h3>
-                      <p className="text-sm text-gray-600 mb-2">
-                        by {selectedCaregiver.caregiver.full_name}
-                      </p>
-                      <div className="flex items-center justify-between mb-2">
-                        {selectedCaregiver.profile && renderStars(selectedCaregiver.profile.rating)}
-                        <span className="font-semibold text-green-600">
-                          ${selectedCaregiver.service.base_price}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => handleBookNow(selectedCaregiver.service)}
-                        className="w-full btn btn-primary btn-sm"
-                      >
-                        Book Now
-                      </button>
-                    </div>
-                  </InfoWindow>
-                )}
-              </GoogleMap>
+          /* Map View - Placeholder */
+          <div className="card">
+            <div className="flex items-center justify-center h-96 bg-gray-100 rounded-lg">
+              <div className="text-center">
+                <MapIcon className="h-16 w-16 mx-auto mb-4 text-gray-400" />
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">Map View Coming Soon</h3>
+                <p className="text-gray-500">Interactive map with caregiver locations will be available shortly</p>
+              </div>
             </div>
-          </LoadScript>
+          </div>
         )}
 
         {/* No Results */}
