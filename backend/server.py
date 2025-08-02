@@ -170,7 +170,12 @@ async def register(user_data: UserCreate, background_tasks: BackgroundTasks, db=
             f"<h1>Welcome {user_data.first_name}!</h1><p>Thanks for joining PetBnB. We're excited to have you on board!</p>"
         )
         
-        access_token = create_access_token(data={"sub": user_data.email, "user_id": created_user['id'], "user_type": user_data.user_type})
+        access_token = create_access_token(data={
+            "sub": user_data.email, 
+            "user_id": created_user['id'], 
+            "user_type": user_data.user_type,
+            "email": user_data.email
+        })
         return {"access_token": access_token, "token_type": "bearer", "user_id": created_user['id']}
         
     except HTTPException:
