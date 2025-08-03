@@ -248,7 +248,213 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user), 
         logger.error(f"Get current user error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get user info")
 
-# Pet management endpoints
+# OAuth and Verification endpoints
+@api_router.post("/auth/oauth/emergent", response_model=dict)
+async def oauth_emergent_login(session_data: dict, db=Depends(get_db_client)):
+    """Handle Emergent OAuth login"""
+    try:
+        session_id = session_data.get("session_id")
+        user_type = session_data.get("user_type", "pet_owner")  # Default to pet_owner
+        
+        if not session_id:
+            raise HTTPException(status_code=400, detail="Session ID required")
+        
+        # Verify session with Emergent Auth
+        oauth_data = await oauth_service.verify_emergent_session(session_id)
+        if not oauth_data:
+            raise HTTPException(status_code=401, detail="Invalid session")
+        
+        # Create or get user
+        user = await oauth_service.create_or_update_oauth_user(db, oauth_data, user_type)
+        
+        # Create session token (7 days expiry)
+        session_token = str(uuid.uuid4())
+        expires_at = datetime.utcnow() + timedelta(days=7)
+        
+        # Store session
+        session_data = {
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "session_token": session_token,
+            "provider": "emergent",
+            "expires_at": expires_at.isoformat(),
+            "is_active": True,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        await db.table("oauth_sessions").insert(session_data).execute()
+        
+        # If new user (email not verified), send verification email
+        if not user.get("email_verified"):
+            verification_token = await verification_service.create_email_verification_token(
+                db, user["id"], user["email"]
+            )
+            await verification_service.send_verification_email(
+                user["email"], verification_token, user["first_name"]
+            )
+        
+        # Create JWT token for API access
+        access_token = create_access_token(data={
+            "sub": user["email"], 
+            "user_id": user["id"], 
+            "user_type": user["user_type"],
+            "email": user["email"]
+        })
+        
+        return {
+            "access_token": access_token,
+            "session_token": session_token,
+            "token_type": "bearer",
+            "user_id": user["id"],
+            "email_verified": user.get("email_verified", False),
+            "expires_in": 7 * 24 * 60 * 60  # 7 days in seconds
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"OAuth login error: {e}")
+        raise HTTPException(status_code=500, detail="OAuth login failed")
+
+@api_router.post("/auth/verify-email", response_model=dict)
+async def verify_email(verification_data: dict, db=Depends(get_db_client)):
+    """Verify email address using verification token"""
+    try:
+        verification_token = verification_data.get("token")
+        if not verification_token:
+            raise HTTPException(status_code=400, detail="Verification token required")
+        
+        # Verify token
+        success = await verification_service.verify_email_token(db, verification_token)
+        
+        if success:
+            return {"message": "Email verified successfully", "verified": True}
+        else:
+            raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Email verification error: {e}")
+        raise HTTPException(status_code=500, detail="Email verification failed")
+
+@api_router.post("/auth/resend-verification", response_model=dict)
+async def resend_verification_email(current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    """Resend email verification"""
+    try:
+        # Get user info
+        user_result = await db.table("users").select("*").eq("id", current_user["user_id"]).execute()
+        if not user_result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user = user_result.data[0]
+        
+        if user.get("email_verified"):
+            return {"message": "Email already verified", "already_verified": True}
+        
+        # Create new verification token
+        verification_token = await verification_service.create_email_verification_token(
+            db, user["id"], user["email"]
+        )
+        
+        # Send verification email
+        await verification_service.send_verification_email(
+            user["email"], verification_token, user["first_name"]
+        )
+        
+        return {"message": "Verification email sent", "sent": True}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Resend verification error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to resend verification email")
+
+@api_router.get("/auth/verification-status", response_model=dict)
+async def get_verification_status(current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    """Get user's verification status"""
+    try:
+        status = await verification_service.check_user_verification_status(db, current_user["user_id"])
+        return {"verification_status": status}
+        
+    except Exception as e:
+        logger.error(f"Get verification status error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get verification status")
+
+@api_router.post("/caregiver/submit-id-verification", response_model=dict)
+async def submit_id_verification(
+    verification_data: dict, 
+    current_user: dict = Depends(get_current_user), 
+    db=Depends(get_db_client)
+):
+    """Submit ID verification for caregivers"""
+    try:
+        if current_user.get("user_type") != "caregiver":
+            raise HTTPException(status_code=403, detail="Only caregivers can submit ID verification")
+        
+        # Check if email is verified first
+        user_result = await db.table("users").select("email_verified").eq("id", current_user["user_id"]).execute()
+        if not user_result.data or not user_result.data[0].get("email_verified"):
+            raise HTTPException(status_code=400, detail="Email must be verified before ID verification")
+        
+        document_type = verification_data.get("document_type")  # "nric" or "passport"
+        id_document_url = verification_data.get("id_document_url")
+        selfie_url = verification_data.get("selfie_url")
+        
+        if not all([document_type, id_document_url, selfie_url]):
+            raise HTTPException(status_code=400, detail="Document type, ID document, and selfie are required")
+        
+        if document_type not in ["nric", "passport"]:
+            raise HTTPException(status_code=400, detail="Document type must be 'nric' or 'passport'")
+        
+        # Create verification request
+        verification_id = await verification_service.create_id_verification_request(
+            db, current_user["user_id"], id_document_url, selfie_url, document_type
+        )
+        
+        return {
+            "message": "ID verification submitted successfully",
+            "verification_id": verification_id,
+            "status": "pending"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"ID verification submission error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to submit ID verification")
+
+@api_router.get("/caregiver/id-verification-status", response_model=dict)
+async def get_id_verification_status(current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    """Get caregiver's ID verification status"""
+    try:
+        if current_user.get("user_type") != "caregiver":
+            raise HTTPException(status_code=403, detail="Only caregivers can check ID verification status")
+        
+        # Get verification status
+        verification_result = await db.table("id_verifications").select("*").eq("user_id", current_user["user_id"]).order("created_at", desc=True).limit(1).execute()
+        
+        if verification_result.data:
+            verification = verification_result.data[0]
+            return {
+                "status": verification["verification_status"],
+                "document_type": verification["document_type"],
+                "submitted_at": verification["submitted_at"],
+                "verified_at": verification.get("verified_at"),
+                "admin_notes": verification.get("admin_notes")
+            }
+        else:
+            return {
+                "status": "not_submitted",
+                "document_type": None,
+                "submitted_at": None,
+                "verified_at": None,
+                "admin_notes": None
+            }
+            
+    except Exception as e:
+        logger.error(f"Get ID verification status error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get ID verification status")
 @api_router.post("/pets", response_model=PetResponse)
 async def create_pet(pet_data: PetCreate, current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
     try:
