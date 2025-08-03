@@ -132,18 +132,6 @@ async def send_verification_email_helper(user_id: str, email: str, first_name: s
         logger.error(f"Failed to send verification email: {e}")
         # Don't fail registration if email sending fails
 
-async def send_verification_email(user_id: str, email: str, first_name: str, db):
-    """Wrapper function to send verification email using verification service"""
-    try:
-        # Create verification token
-        verification_token = await verification_service.create_email_verification_token(db, user_id, email)
-        
-        # Send verification email
-        await verification_service.send_verification_email(email, verification_token, first_name)
-        
-        logger.info(f"Verification email sent to {email} for user {user_id}")
-    except Exception as e:
-        logger.error(f"Failed to send verification email to {email}: {str(e)}")
 
 # Authentication endpoints
 @api_router.post("/auth/register", response_model=dict)
