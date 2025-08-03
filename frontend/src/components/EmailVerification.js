@@ -38,7 +38,7 @@ const EmailVerification = () => {
       if (response.ok) {
         setVerificationStatus('success');
         setMessage('Your email has been successfully verified! You can now access all features.');
-        showToast('Email verified successfully!', 'success');
+        toast.success('Email verified successfully!');
       } else {
         setVerificationStatus('error');
         setMessage(data.detail || 'Email verification failed');
