@@ -85,7 +85,7 @@ function App() {
       setShowAuthModal(false);
       return { success: true };
     } catch (error) {
-      return { success: false, error: error.response?.data?.detail || 'Login failed' };
+      return { success: false, error: formatErrorMessage(error) };
     }
   };
 
