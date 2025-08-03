@@ -402,7 +402,7 @@ class RegistrationTester:
         
         timestamp = datetime.now().strftime("%H%M%S")
         
-        # Test registration without phone number
+        # Test registration without phone number (should succeed since phone is optional)
         user_data_no_phone = {
             "email": f"nophone_{timestamp}@test.com",
             "password": "TestPass123!",
@@ -411,9 +411,9 @@ class RegistrationTester:
             "user_type": "pet_owner"
         }
         
-        success, response = self.make_request('POST', '/api/auth/register', user_data_no_phone, expected_status=422)
+        success, response = self.make_request('POST', '/api/auth/register', user_data_no_phone, expected_status=200)
         no_phone_test = self.log_test("Registration Without Phone", success,
-                                    f"Correctly rejected missing phone: {response.get('detail', 'N/A')}")
+                                    f"Registration successful: {bool(response.get('access_token'))}")
         
         # Test registration with phone number
         user_data_with_phone = {
