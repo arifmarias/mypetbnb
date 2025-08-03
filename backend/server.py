@@ -123,7 +123,7 @@ async def send_email(to_email: str, subject: str, body: str):
     except Exception as e:
         logger.error(f"Failed to send email to {to_email}: {str(e)}")
 
-async def send_verification_email_helper(user_id: str, email: str, first_name: str, db):
+async def send_verification_email(user_id: str, email: str, first_name: str, db):
     """Helper function to send verification email during registration"""
     try:
         verification_token = await verification_service.create_email_verification_token(db, user_id, email)
@@ -131,7 +131,6 @@ async def send_verification_email_helper(user_id: str, email: str, first_name: s
     except Exception as e:
         logger.error(f"Failed to send verification email: {e}")
         # Don't fail registration if email sending fails
-
 
 # Authentication endpoints
 @api_router.post("/auth/register", response_model=dict)
@@ -176,7 +175,7 @@ async def register(user_data: UserCreate, background_tasks: BackgroundTasks, db=
         
         # Send verification email for new users
         background_tasks.add_task(
-            send_verification_email_helper,
+            send_verification_email,
             created_user['id'],
             user_data.email,
             user_data.first_name,
