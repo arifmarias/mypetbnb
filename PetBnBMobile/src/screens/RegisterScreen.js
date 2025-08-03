@@ -20,7 +20,8 @@ const RegisterScreen = ({ navigation }) => {
   const toast = useToast();
   
   const [formData, setFormData] = useState({
-    full_name: '',
+    first_name: '',
+    last_name: '',
     email: '',
     password: '',
     confirmPassword: '',
