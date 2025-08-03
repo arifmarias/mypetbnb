@@ -56,10 +56,11 @@ const RegisterScreen = ({ navigation }) => {
     
     try {
       const result = await register({
-        full_name: formData.full_name,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
         email: formData.email.toLowerCase(),
         password: formData.password,
-        role: formData.role,
+        user_type: formData.role,
       });
 
       if (result.success) {
