@@ -8,7 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import EmailVerificationScreen from './src/screens/EmailVerificationScreen';
 // Context
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ToastProvider } from './src/context/ToastContext';
@@ -127,7 +127,6 @@ function AppNavigator() {
       const pushToken = await notificationService.initialize();
       if (pushToken) {
         console.log('Push notifications initialized with token:', pushToken);
-        // In real app, send this token to your backend to store for the user
       }
     } catch (error) {
       console.error('Failed to initialize notifications:', error);
@@ -146,6 +145,11 @@ function AppNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {user ? (
         <>
+          {/* Check if email is verified */}
+          {!user.email_verified ? (
+            <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
+          ) : null}
+          
           <Stack.Screen name="MainTabs" component={TabNavigator} />
           <Stack.Screen name="Booking" component={BookingScreen} />
           <Stack.Screen name="PetDetails" component={PetDetailsScreen} />

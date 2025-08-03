@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-// Use your existing backend URL
-const API_BASE_URL = 'https://387c6cb1-495f-4442-86a9-09b27c6e460e.preview.emergentagent.com';
+// Use your computer's IP address (replace with your actual IP)
+// Run 'ipconfig getifaddr en0' in terminal to find your IP
+const API_BASE_URL = 'http://192.168.68.105:8000';  // Replace YOUR_IP_ADDRESS with actual IP
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -58,6 +59,10 @@ export const bookingsAPI = {
   getBookings: () => api.get('/api/bookings'),
   createBooking: (bookingData) => api.post('/api/bookings', bookingData),
   getBooking: (bookingId) => api.get(`/api/bookings/${bookingId}`),
+  getBookingDetails: (bookingId) => api.get(`/api/bookings/${bookingId}/details`),
+  updateBookingStatus: (bookingId, statusData) => api.put(`/api/bookings/${bookingId}/status`, statusData),
+  getUpcomingBookings: () => api.get('/api/bookings/upcoming'),
+  getBookingHistory: () => api.get('/api/bookings/history'),
 };
 
 export const messagesAPI = {

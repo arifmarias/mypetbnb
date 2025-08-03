@@ -27,6 +27,7 @@ import asyncio
 import httpx
 from enum import Enum
 import logging
+from fastapi.responses import HTMLResponse
 
 # Import new Supabase modules
 from database import get_db_client, startup_event, shutdown_event
@@ -126,8 +127,137 @@ async def send_email(to_email: str, subject: str, body: str):
 async def send_verification_email(user_id: str, email: str, first_name: str, db):
     """Helper function to send verification email during registration"""
     try:
-        verification_token = await verification_service.create_email_verification_token(db, user_id, email)
-        await verification_service.send_verification_email(email, verification_token, first_name)
+        # Create verification token
+        verification_token = str(uuid.uuid4())
+        expires_at = datetime.utcnow() + timedelta(hours=24)
+        
+        verification_data = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "email": email,
+            "verification_token": verification_token,
+            "verification_type": "email",
+            "expires_at": expires_at.isoformat(),
+            "is_used": False,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        await db.table("verification_tokens").insert(verification_data).execute()
+        
+        # Send verification email with beautiful template
+        verification_url = f"{os.getenv('FRONTEND_URL')}/verify-email?token={verification_token}"
+        
+        await send_email(
+            email,
+            "Verify Your PetBnB Account 📧",
+            f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    .container {{ max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }}
+                    .header {{ background-color: #FF5A5F; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+                    .content {{ padding: 30px; background-color: #ffffff; border: 1px solid #e0e0e0; }}
+                    .button {{ 
+                        display: inline-block; 
+                        padding: 15px 30px; 
+                        background-color: #FF5A5F; 
+                        color: #ffffff !important; 
+                        text-decoration: none; 
+                        border-radius: 8px; 
+                        margin: 20px 0;
+                        font-weight: bold;
+                        font-size: 16px;
+                        border: 2px solid #FF5A5F;
+                        text-align: center;
+                        min-width: 200px;
+                        box-shadow: 0 4px 8px rgba(255, 90, 95, 0.3);
+                    }}
+                    .button:hover {{
+                        background-color: #e84a54;
+                        border-color: #e84a54;
+                    }}
+                    .link-text {{
+                        word-break: break-all;
+                        background-color: #f5f5f5;
+                        padding: 10px;
+                        border-radius: 4px;
+                        font-family: monospace;
+                        font-size: 12px;
+                    }}
+                    .footer {{ 
+                        padding: 20px; 
+                        text-align: center; 
+                        color: #666; 
+                        font-size: 12px; 
+                        background-color: #f9f9f9;
+                        border-radius: 0 0 8px 8px;
+                    }}
+                    .highlight {{
+                        background-color: #fff3cd;
+                        padding: 15px;
+                        border-radius: 6px;
+                        border-left: 4px solid #ffc107;
+                        margin: 20px 0;
+                    }}
+                    .verification-box {{
+                        background: linear-gradient(135deg, #FF5A5F 0%, #FF8A80 100%);
+                        color: white;
+                        padding: 25px;
+                        border-radius: 12px;
+                        text-align: center;
+                        margin: 20px 0;
+                    }}
+                </style>
+            </head>
+            <body style="background-color: #f4f4f4; padding: 20px;">
+                <div class="container">
+                    <div class="header">
+                        <h1 style="margin: 0;">📧 Verify Your Email</h1>
+                    </div>
+                    <div class="content">
+                        <div class="verification-box">
+                            <h2 style="margin: 10px 0; color: white;">Hi {first_name}!</h2>
+                            <p style="margin: 0; font-size: 16px; color: white;">Just one more step to complete your PetBnB account!</p>
+                        </div>
+                        
+                        <p style="font-size: 16px; color: #333;">
+                            Thank you for joining PetBnB! Please verify your email address to complete your account setup and unlock all features.
+                        </p>
+                        
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="{verification_url}" class="button">✉️ VERIFY EMAIL ADDRESS</a>
+                        </div>
+                        
+                        <div class="highlight">
+                            <p style="margin: 0; color: #856404;"><strong>🔓 After verification, you can:</strong></p>
+                            <ul style="margin: 10px 0 0 0; color: #856404;">
+                                <li>Create and manage pet profiles</li>
+                                <li>Book pet care services</li>
+                                <li>Message with caregivers</li>
+                                <li>Access all PetBnB features</li>
+                            </ul>
+                        </div>
+                        
+                        <p style="color: #666; font-size: 14px;">If the button doesn't work, copy and paste this link in your browser:</p>
+                        <div class="link-text">
+                            <a href="{verification_url}" style="color: #FF5A5F; text-decoration: none;">{verification_url}</a>
+                        </div>
+                        
+                        <p style="color: #888; font-size: 14px; margin-top: 30px;">
+                            ⏰ This verification link will expire in 24 hours.
+                        </p>
+                    </div>
+                    <div class="footer">
+                        <p style="margin: 0;">If you didn't create an account with PetBnB, please ignore this email.</p>
+                        <p style="margin: 5px 0 0 0;">© 2024 PetBnB - Your Pet's Home Away From Home</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+        )
+        
     except Exception as e:
         logger.error(f"Failed to send verification email: {e}")
         # Don't fail registration if email sending fails
@@ -186,8 +316,118 @@ async def register(user_data: UserCreate, background_tasks: BackgroundTasks, db=
         background_tasks.add_task(
             send_email,
             user_data.email,
-            "Welcome to PetBnB!",
-            f"<h1>Welcome {user_data.first_name}!</h1><p>Thanks for joining PetBnB. Please check your email to verify your account!</p>"
+            "Welcome to PetBnB! 🐾",
+            f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    .container {{ max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }}
+                    .header {{ background-color: #FF5A5F; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+                    .content {{ padding: 30px; background-color: #ffffff; border: 1px solid #e0e0e0; }}
+                    .welcome-box {{
+                        background: linear-gradient(135deg, #FF5A5F 0%, #FF8A80 100%);
+                        color: white;
+                        padding: 25px;
+                        border-radius: 12px;
+                        text-align: center;
+                        margin: 20px 0;
+                    }}
+                    .feature-box {{
+                        background-color: #f8f9fa;
+                        padding: 20px;
+                        border-radius: 8px;
+                        margin: 15px 0;
+                        border-left: 4px solid #FF5A5F;
+                    }}
+                    .button {{ 
+                        display: inline-block; 
+                        padding: 15px 30px; 
+                        background-color: #FF5A5F; 
+                        color: #ffffff !important; 
+                        text-decoration: none; 
+                        border-radius: 8px; 
+                        margin: 20px 0;
+                        font-weight: bold;
+                        font-size: 16px;
+                        border: 2px solid #FF5A5F;
+                        text-align: center;
+                        min-width: 200px;
+                        box-shadow: 0 4px 8px rgba(255, 90, 95, 0.3);
+                    }}
+                    .footer {{ 
+                        padding: 20px; 
+                        text-align: center; 
+                        color: #666; 
+                        font-size: 12px; 
+                        background-color: #f9f9f9;
+                        border-radius: 0 0 8px 8px;
+                    }}
+                    .emoji {{ font-size: 24px; }}
+                </style>
+            </head>
+            <body style="background-color: #f4f4f4; padding: 20px;">
+                <div class="container">
+                    <div class="header">
+                        <h1 style="margin: 0;">🐾 Welcome to PetBnB!</h1>
+                    </div>
+                    <div class="content">
+                        <div class="welcome-box">
+                            <div class="emoji">🎉</div>
+                            <h2 style="margin: 10px 0; color: white;">Hi {user_data.first_name}!</h2>
+                            <p style="margin: 0; font-size: 18px; color: white;">Welcome to the PetBnB family!</p>
+                        </div>
+                        
+                        <p style="font-size: 16px; color: #333; line-height: 1.6;">
+                            Thank you for joining PetBnB - the trusted platform connecting pet owners with loving caregivers across Malaysia and Singapore!
+                        </p>
+                        
+                        <div class="feature-box">
+                            <h3 style="margin: 0 0 10px 0; color: #FF5A5F;">🔐 Next Step: Verify Your Email</h3>
+                            <p style="margin: 0; color: #666;">We've sent you a verification email. Please check your inbox and click the verification link to complete your account setup.</p>
+                        </div>
+                        
+                        <h3 style="color: #333; margin-top: 30px;">What you can do with PetBnB:</h3>
+                        
+                        {"<div class='feature-box'><h4 style='margin: 0 0 10px 0; color: #FF5A5F;'>🏠 For Pet Owners:</h4><p style='margin: 0; color: #666;'>Find trusted caregivers for boarding, walking, grooming, and sitting services.</p></div>" if user_data.user_type == "pet_owner" else "<div class='feature-box'><h4 style='margin: 0 0 10px 0; color: #FF5A5F;'>💼 For Caregivers:</h4><p style='margin: 0; color: #666;'>Offer your pet care services and earn money doing what you love!</p></div>"}
+                        
+                        <div class="feature-box">
+                            <h4 style="margin: 0 0 10px 0; color: #FF5A5F;">✅ Verified & Safe</h4>
+                            <p style="margin: 0; color: #666;">All caregivers go through background checks and identity verification.</p>
+                        </div>
+                        
+                        <div class="feature-box">
+                            <h4 style="margin: 0 0 10px 0; color: #FF5A5F;">💬 Real-time Messaging</h4>
+                            <p style="margin: 0; color: #666;">Stay connected with caregivers through our built-in messaging system.</p>
+                        </div>
+                        
+                        <div class="feature-box">
+                            <h4 style="margin: 0 0 10px 0; color: #FF5A5F;">💳 Secure Payments</h4>
+                            <p style="margin: 0; color: #666;">Safe and convenient payments with local Malaysian and Singaporean payment methods.</p>
+                        </div>
+                        
+                        <div style="text-align: center; margin: 30px 0; padding: 20px; background-color: #fff3cd; border-radius: 8px;">
+                            <p style="margin: 0; color: #856404; font-weight: bold;">
+                                📧 Don't forget to verify your email to unlock all features!
+                            </p>
+                        </div>
+                        
+                        <p style="color: #666; text-align: center; margin-top: 30px;">
+                            Welcome aboard! We're excited to help you provide the best care for pets. 🐕🐱
+                        </p>
+                    </div>
+                    <div class="footer">
+                        <p style="margin: 0;">Need help? Contact us at support@petbnb.com</p>
+                        <p style="margin: 5px 0 0 0;">© 2024 PetBnB - Your Pet's Home Away From Home</p>
+                        <p style="margin: 10px 0 0 0;">
+                            <a href="#" style="color: #FF5A5F; text-decoration: none;">Privacy Policy</a> | 
+                            <a href="#" style="color: #FF5A5F; text-decoration: none;">Terms of Service</a>
+                        </p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
         )
         
         access_token = create_access_token(data={
@@ -244,6 +484,231 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user), 
     except Exception as e:
         logger.error(f"Get current user error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get user info")
+
+# Add to backend/server.py - Insert these endpoints after the existing auth endpoints
+
+@api_router.post("/auth/verify-email", response_model=dict)
+async def verify_email(verification_data: dict, db=Depends(get_db_client)):
+    """Verify email address using verification token"""
+    try:
+        verification_token = verification_data.get("token")
+        if not verification_token:
+            raise HTTPException(status_code=400, detail="Verification token required")
+        
+        # Get verification token from database
+        token_result = await db.table("verification_tokens").select("*").eq("verification_token", verification_token).eq("is_used", False).execute()
+        
+        if not token_result.data:
+            raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+        
+        token_data = token_result.data[0]
+        
+        # Check if token expired
+        from datetime import datetime
+        expires_at = datetime.fromisoformat(token_data["expires_at"].replace('Z', '+00:00'))
+        if datetime.utcnow().replace(tzinfo=expires_at.tzinfo) > expires_at:
+            raise HTTPException(status_code=400, detail="Verification token has expired")
+        
+        # Mark token as used
+        await db.table("verification_tokens").update({
+            "is_used": True,
+            "verified_at": datetime.utcnow().isoformat()
+        }).eq("verification_token", verification_token).execute()
+        
+        # Update user email_verified status
+        await db.table("users").update({
+            "email_verified": True,
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", token_data["user_id"]).execute()
+        
+        return {"message": "Email verified successfully", "verified": True}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Email verification error: {e}")
+        raise HTTPException(status_code=500, detail="Email verification failed")
+
+@api_router.post("/auth/resend-verification", response_model=dict)
+async def resend_verification_email(current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    """Resend email verification"""
+    try:
+        # Get user info
+        user_result = await db.table("users").select("*").eq("id", current_user["user_id"]).execute()
+        if not user_result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user = user_result.data[0]
+        
+        if user.get("email_verified"):
+            return {"message": "Email already verified", "already_verified": True}
+        
+        # Create new verification token
+        verification_token = str(uuid.uuid4())
+        expires_at = datetime.utcnow() + timedelta(hours=24)
+        
+        verification_data = {
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "email": user["email"],
+            "verification_token": verification_token,
+            "verification_type": "email",
+            "expires_at": expires_at.isoformat(),
+            "is_used": False,
+            "created_at": datetime.utcnow().isoformat()
+        }
+        
+        await db.table("verification_tokens").insert(verification_data).execute()
+        
+        # Send verification email
+        verification_url = f"{os.getenv('FRONTEND_URL')}/verify-email?token={verification_token}"
+        
+        await send_email(
+            user["email"],
+            "Verify Your PetBnB Account",
+            f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <style>
+                    .container {{ max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }}
+                    .header {{ background-color: #FF5A5F; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }}
+                    .content {{ padding: 30px; background-color: #ffffff; border: 1px solid #e0e0e0; }}
+                    .button {{ 
+                        display: inline-block; 
+                        padding: 15px 30px; 
+                        background-color: #FF5A5F; 
+                        color: #ffffff !important; 
+                        text-decoration: none; 
+                        border-radius: 8px; 
+                        margin: 20px 0;
+                        font-weight: bold;
+                        font-size: 16px;
+                        border: 2px solid #FF5A5F;
+                        text-align: center;
+                        min-width: 200px;
+                        box-shadow: 0 4px 8px rgba(255, 90, 95, 0.3);
+                    }}
+                    .button:hover {{
+                        background-color: #e84a54;
+                        border-color: #e84a54;
+                    }}
+                    .link-text {{
+                        word-break: break-all;
+                        background-color: #f5f5f5;
+                        padding: 10px;
+                        border-radius: 4px;
+                        font-family: monospace;
+                        font-size: 12px;
+                    }}
+                    .footer {{ 
+                        padding: 20px; 
+                        text-align: center; 
+                        color: #666; 
+                        font-size: 12px; 
+                        background-color: #f9f9f9;
+                        border-radius: 0 0 8px 8px;
+                    }}
+                    .highlight {{
+                        background-color: #fff3cd;
+                        padding: 15px;
+                        border-radius: 6px;
+                        border-left: 4px solid #ffc107;
+                        margin: 20px 0;
+                    }}
+                </style>
+            </head>
+            <body style="background-color: #f4f4f4; padding: 20px;">
+                <div class="container">
+                    <div class="header">
+                        <h1 style="margin: 0;">🐾 Welcome to PetBnB!</h1>
+                    </div>
+                    <div class="content">
+                        <h2 style="color: #333;">Hi {user['first_name']}!</h2>
+                        <p>Thank you for joining PetBnB! Please verify your email address to complete your account setup.</p>
+                        
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="{verification_url}" class="button">✉️ VERIFY EMAIL ADDRESS</a>
+                        </div>
+                        
+                        <div class="highlight">
+                            <p style="margin: 0; color: #856404;"><strong>Important:</strong> You need to verify your email before you can:</p>
+                            <ul style="margin: 10px 0 0 0; color: #856404;">
+                                <li>Create bookings (for pet owners)</li>
+                                <li>Create services (for caregivers)</li>
+                                <li>Access full platform features</li>
+                            </ul>
+                        </div>
+                        
+                        <p style="color: #666; font-size: 14px;">If the button doesn't work, copy and paste this link in your browser:</p>
+                        <div class="link-text">
+                            <a href="{verification_url}" style="color: #FF5A5F; text-decoration: none;">{verification_url}</a>
+                        </div>
+                        
+                        <p style="color: #888; font-size: 14px; margin-top: 30px;">
+                            ⏰ This verification link will expire in 24 hours.
+                        </p>
+                    </div>
+                    <div class="footer">
+                        <p style="margin: 0;">If you didn't create an account with PetBnB, please ignore this email.</p>
+                        <p style="margin: 5px 0 0 0;">© 2024 PetBnB - Your Pet's Home Away From Home</p>
+                    </div>
+                </div>
+            </body>
+            </html>
+            """
+        )
+        
+        return {"message": "Verification email sent", "sent": True}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Resend verification error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to resend verification email")
+
+@api_router.get("/auth/verification-status", response_model=dict)
+async def get_verification_status(current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    """Get user's verification status"""
+    try:
+        # Get user info
+        user_result = await db.table("users").select("*").eq("id", current_user["user_id"]).execute()
+        if not user_result.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        user = user_result.data[0]
+        
+        verification_status = {
+            "email_verified": user.get("email_verified", False),
+            "id_verification_status": None,
+            "id_verification_required": user.get("user_type") == "caregiver",
+            "can_create_bookings": False,
+            "can_create_services": False
+        }
+        
+        # Check ID verification for caregivers
+        if user.get("user_type") == "caregiver":
+            profile_result = await db.table("caregiver_profiles").select("*").eq("user_id", current_user["user_id"]).execute()
+            if profile_result.data:
+                profile = profile_result.data[0]
+                verification_status["id_verification_status"] = profile.get("id_verification_status", "not_submitted")
+        
+        # Determine permissions
+        if user.get("user_type") == "pet_owner":
+            verification_status["can_create_bookings"] = user.get("email_verified", False)
+        elif user.get("user_type") == "caregiver":
+            verification_status["can_create_services"] = (
+                user.get("email_verified", False) and
+                verification_status["id_verification_status"] == "approved"
+            )
+        
+        return {"verification_status": verification_status}
+        
+    except Exception as e:
+        logger.error(f"Get verification status error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get verification status")
+    
+
 
 # OAuth and Verification endpoints
 @api_router.post("/auth/oauth/emergent", response_model=dict)
@@ -312,7 +777,90 @@ async def oauth_emergent_login(session_data: dict, db=Depends(get_db_client)):
     except Exception as e:
         logger.error(f"OAuth login error: {e}")
         raise HTTPException(status_code=500, detail="OAuth login failed")
-
+@app.get("/verify-email", response_class=HTMLResponse)
+async def verify_email_web(token: str, db=Depends(get_db_client)):
+    """Web-based email verification endpoint"""
+    try:
+        # Get verification token from database
+        token_result = await db.table("verification_tokens").select("*").eq("verification_token", token).eq("is_used", False).execute()
+        
+        if not token_result.data:
+            return HTMLResponse("""
+            <html>
+                <head><title>Email Verification - PetBnB</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1 style="color: #FF5A5F;">❌ Verification Failed</h1>
+                    <p>This verification link is invalid or has already been used.</p>
+                    <p>Please request a new verification email from the app.</p>
+                </body>
+            </html>
+            """, status_code=400)
+        
+        token_data = token_result.data[0]
+        
+        # Check if token expired
+        expires_at = datetime.fromisoformat(token_data["expires_at"].replace('Z', '+00:00'))
+        if datetime.utcnow().replace(tzinfo=expires_at.tzinfo) > expires_at:
+            return HTMLResponse("""
+            <html>
+                <head><title>Email Verification - PetBnB</title></head>
+                <body style="font-family: Arial; text-align: center; padding: 50px;">
+                    <h1 style="color: #FF5A5F;">❌ Link Expired</h1>
+                    <p>This verification link has expired.</p>
+                    <p>Please request a new verification email from the app.</p>
+                </body>
+            </html>
+            """, status_code=400)
+        
+        # Mark token as used
+        await db.table("verification_tokens").update({
+            "is_used": True,
+            "verified_at": datetime.utcnow().isoformat()
+        }).eq("verification_token", token).execute()
+        
+        # Update user email_verified status
+        user_result = await db.table("users").update({
+            "email_verified": True,
+            "updated_at": datetime.utcnow().isoformat()
+        }).eq("id", token_data["user_id"]).execute()
+        
+        # Get user info for personalized message
+        user_info = await db.table("users").select("first_name, email").eq("id", token_data["user_id"]).execute()
+        user_name = user_info.data[0]["first_name"] if user_info.data else "User"
+        
+        return HTMLResponse(f"""
+        <html>
+            <head>
+                <title>Email Verification - PetBnB</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="font-family: Arial; text-align: center; padding: 50px; background-color: #f9f9f9;">
+                <div style="max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <h1 style="color: #FF5A5F;">✅ Email Verified!</h1>
+                    <p style="font-size: 18px; color: #333;">Hi {user_name}!</p>
+                    <p style="color: #666;">Your email has been successfully verified.</p>
+                    <p style="color: #666;">You can now return to the PetBnB app and enjoy all features!</p>
+                    <div style="margin-top: 30px; padding: 20px; background-color: #f0f0f0; border-radius: 8px;">
+                        <p style="color: #333; margin: 0;">Return to the app and tap<br><strong>"I've Verified My Email"</strong></p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """)
+        
+    except Exception as e:
+        logger.error(f"Web email verification error: {e}")
+        return HTMLResponse("""
+        <html>
+            <head><title>Email Verification - PetBnB</title></head>
+            <body style="font-family: Arial; text-align: center; padding: 50px;">
+                <h1 style="color: #FF5A5F;">❌ Verification Error</h1>
+                <p>An error occurred during verification.</p>
+                <p>Please try again or contact support.</p>
+            </body>
+        </html>
+        """, status_code=500)
+        
 @api_router.post("/auth/verify-email", response_model=dict)
 async def verify_email(verification_data: dict, db=Depends(get_db_client)):
     """Verify email address using verification token"""
@@ -673,6 +1221,277 @@ async def get_user_bookings(current_user: dict = Depends(get_current_user), db=D
     except Exception as e:
         logger.error(f"Get bookings error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get bookings")
+
+# Add these enhanced booking endpoints to your backend/server.py
+
+@api_router.put("/bookings/{booking_id}/status", response_model=dict)
+async def update_booking_status(
+    booking_id: str, 
+    status_data: dict, 
+    current_user: dict = Depends(get_current_user), 
+    db=Depends(get_db_client)
+):
+    """Update booking status (caregiver can confirm/reject, both can cancel)"""
+    try:
+        new_status = status_data.get("status")
+        if not new_status or new_status not in ["confirmed", "rejected", "cancelled", "in_progress", "completed"]:
+            raise HTTPException(status_code=400, detail="Invalid status")
+        
+        # Get booking details
+        booking_result = await db.table("bookings").select("*, caregiver_profiles!inner(user_id)").eq("id", booking_id).execute()
+        if not booking_result.data:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        
+        booking = booking_result.data[0]
+        
+        # Check if user has permission to update this booking
+        is_pet_owner = booking["pet_owner_id"] == current_user["user_id"]
+        is_caregiver = booking["caregiver_profiles"]["user_id"] == current_user["user_id"]
+        
+        if not (is_pet_owner or is_caregiver):
+            raise HTTPException(status_code=403, detail="Not authorized to update this booking")
+        
+        # Business rules for status changes
+        current_status = booking["booking_status"]
+        
+        # Only caregiver can confirm/reject pending bookings
+        if new_status in ["confirmed", "rejected"] and not is_caregiver:
+            raise HTTPException(status_code=403, detail="Only caregiver can confirm or reject bookings")
+        
+        # Only caregiver can mark as in_progress or completed
+        if new_status in ["in_progress", "completed"] and not is_caregiver:
+            raise HTTPException(status_code=403, detail="Only caregiver can update service progress")
+        
+        # Both can cancel (with different rules)
+        if new_status == "cancelled":
+            if current_status in ["completed"]:
+                raise HTTPException(status_code=400, detail="Cannot cancel completed bookings")
+        
+        # Update booking status
+        update_data = {
+            "booking_status": new_status,
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        result = await db.table("bookings").update(update_data).eq("id", booking_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to update booking")
+        
+        # Send notification emails based on status change
+        booking_data = result.data[0]
+        
+        # Get user details for notifications
+        pet_owner_result = await db.table("users").select("*").eq("id", booking["pet_owner_id"]).execute()
+        caregiver_result = await db.table("users").select("*").eq("id", booking["caregiver_profiles"]["user_id"]).execute()
+        service_result = await db.table("caregiver_services").select("*").eq("id", booking["service_id"]).execute()
+        
+        if pet_owner_result.data and caregiver_result.data and service_result.data:
+            pet_owner = pet_owner_result.data[0]
+            caregiver = caregiver_result.data[0]
+            service = service_result.data[0]
+            
+            # Send appropriate notification emails
+            if new_status == "confirmed":
+                await send_booking_confirmation_email(pet_owner, caregiver, service, booking_data)
+            elif new_status == "rejected":
+                await send_booking_rejection_email(pet_owner, caregiver, service, booking_data)
+            elif new_status == "completed":
+                await send_booking_completion_email(pet_owner, caregiver, service, booking_data)
+        
+        return {
+            "message": f"Booking status updated to {new_status}",
+            "booking_id": booking_id,
+            "new_status": new_status
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update booking status error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update booking status")
+
+@api_router.get("/bookings/{booking_id}/details", response_model=dict)
+async def get_booking_details(
+    booking_id: str, 
+    current_user: dict = Depends(get_current_user), 
+    db=Depends(get_db_client)
+):
+    """Get detailed booking information with all related data"""
+    try:
+        # Get booking with related data
+        booking_result = await db.table("bookings").select("""
+            *,
+            users!bookings_pet_owner_id_fkey(first_name, last_name, email, phone),
+            caregiver_profiles!inner(*, users!caregiver_profiles_user_id_fkey(first_name, last_name, email, phone)),
+            pets(*),
+            caregiver_services(*)
+        """).eq("id", booking_id).execute()
+        
+        if not booking_result.data:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        
+        booking = booking_result.data[0]
+        
+        # Check if user has permission to view this booking
+        is_pet_owner = booking["pet_owner_id"] == current_user["user_id"]
+        is_caregiver = booking["caregiver_profiles"]["user_id"] == current_user["user_id"]
+        
+        if not (is_pet_owner or is_caregiver):
+            raise HTTPException(status_code=403, detail="Not authorized to view this booking")
+        
+        # Get messages for this booking
+        messages_result = await db.table("messages").select("*").eq("booking_id", booking_id).order("created_at").execute()
+        
+        return {
+            "booking": booking,
+            "messages": messages_result.data or [],
+            "user_role": "pet_owner" if is_pet_owner else "caregiver"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get booking details error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get booking details")
+
+@api_router.get("/bookings/upcoming", response_model=List[dict])
+async def get_upcoming_bookings(current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    """Get upcoming bookings for current user"""
+    try:
+        current_time = datetime.utcnow().isoformat()
+        
+        if current_user.get("user_type") == "pet_owner":
+            result = await db.table("bookings").select("""
+                *,
+                caregiver_profiles!inner(*, users!caregiver_profiles_user_id_fkey(first_name, last_name, profile_image_url)),
+                pets(name, species, breed),
+                caregiver_services(service_name, title)
+            """).eq("pet_owner_id", current_user["user_id"]).gte("start_datetime", current_time).in_("booking_status", ["pending", "confirmed", "in_progress"]).order("start_datetime").execute()
+        else:
+            # Get caregiver profile first
+            profile_result = await db.table("caregiver_profiles").select("id").eq("user_id", current_user["user_id"]).execute()
+            if not profile_result.data:
+                return []
+            
+            caregiver_id = profile_result.data[0]["id"]
+            result = await db.table("bookings").select("""
+                *,
+                users!bookings_pet_owner_id_fkey(first_name, last_name, profile_image_url),
+                pets(name, species, breed),
+                caregiver_services(service_name, title)
+            """).eq("caregiver_id", caregiver_id).gte("start_datetime", current_time).in_("booking_status", ["pending", "confirmed", "in_progress"]).order("start_datetime").execute()
+        
+        return result.data or []
+        
+    except Exception as e:
+        logger.error(f"Get upcoming bookings error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get upcoming bookings")
+
+@api_router.get("/bookings/history", response_model=List[dict])
+async def get_booking_history(current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    """Get booking history for current user"""
+    try:
+        if current_user.get("user_type") == "pet_owner":
+            result = await db.table("bookings").select("""
+                *,
+                caregiver_profiles!inner(*, users!caregiver_profiles_user_id_fkey(first_name, last_name, profile_image_url)),
+                pets(name, species, breed),
+                caregiver_services(service_name, title)
+            """).eq("pet_owner_id", current_user["user_id"]).in_("booking_status", ["completed", "cancelled", "rejected"]).order("created_at", desc=True).limit(50).execute()
+        else:
+            # Get caregiver profile first
+            profile_result = await db.table("caregiver_profiles").select("id").eq("user_id", current_user["user_id"]).execute()
+            if not profile_result.data:
+                return []
+            
+            caregiver_id = profile_result.data[0]["id"] 
+            result = await db.table("bookings").select("""
+                *,
+                users!bookings_pet_owner_id_fkey(first_name, last_name, profile_image_url),
+                pets(name, species, breed),
+                caregiver_services(service_name, title)
+            """).eq("caregiver_id", caregiver_id).in_("booking_status", ["completed", "cancelled", "rejected"]).order("created_at", desc=True).limit(50).execute()
+        
+        return result.data or []
+        
+    except Exception as e:
+        logger.error(f"Get booking history error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get booking history")
+
+# Email notification functions
+async def send_booking_confirmation_email(pet_owner, caregiver, service, booking):
+    """Send booking confirmation email to pet owner"""
+    try:
+        start_date = datetime.fromisoformat(booking["start_datetime"].replace('Z', '+00:00')).strftime("%B %d, %Y at %I:%M %p")
+        
+        await send_email(
+            pet_owner["email"],
+            "Booking Confirmed! 🎉",
+            f"""
+            <h2>Great News! Your booking has been confirmed!</h2>
+            <p>Hi {pet_owner['first_name']}!</p>
+            <p><strong>{caregiver['first_name']} {caregiver['last_name']}</strong> has confirmed your booking for <strong>{service['title']}</strong>.</p>
+            <div style="background-color: #d4edda; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <h3>Booking Details:</h3>
+                <p><strong>Service:</strong> {service['title']}</p>
+                <p><strong>Date & Time:</strong> {start_date}</p>
+                <p><strong>Total:</strong> ${booking['total_amount']}</p>
+            </div>
+            <p>You can now message your caregiver directly through the app!</p>
+            """
+        )
+    except Exception as e:
+        logger.error(f"Failed to send confirmation email: {e}")
+
+async def send_booking_rejection_email(pet_owner, caregiver, service, booking):
+    """Send booking rejection email to pet owner"""
+    try:
+        await send_email(
+            pet_owner["email"],
+            "Booking Update - Unable to Confirm",
+            f"""
+            <h2>Booking Update</h2>
+            <p>Hi {pet_owner['first_name']},</p>
+            <p>Unfortunately, <strong>{caregiver['first_name']} {caregiver['last_name']}</strong> is unable to confirm your booking for <strong>{service['title']}</strong>.</p>
+            <p>Don't worry! There are many other great caregivers available. You can search for alternative options in the app.</p>
+            <p>If payment was processed, it will be automatically refunded within 3-5 business days.</p>
+            """
+        )
+    except Exception as e:
+        logger.error(f"Failed to send rejection email: {e}")
+
+async def send_booking_completion_email(pet_owner, caregiver, service, booking):
+    """Send booking completion email to both parties"""
+    try:
+        # Email to pet owner
+        await send_email(
+            pet_owner["email"],
+            "Service Completed! Please Leave a Review ⭐",
+            f"""
+            <h2>Service Completed Successfully!</h2>
+            <p>Hi {pet_owner['first_name']}!</p>
+            <p>Your <strong>{service['title']}</strong> service with <strong>{caregiver['first_name']} {caregiver['last_name']}</strong> has been completed.</p>
+            <p>We hope you and your pet had a wonderful experience!</p>
+            <p><strong>Please take a moment to leave a review</strong> to help other pet owners and support your caregiver.</p>
+            """
+        )
+        
+        # Email to caregiver
+        await send_email(
+            caregiver["email"],
+            "Service Completed - Payment Processing",
+            f"""
+            <h2>Service Completed!</h2>
+            <p>Hi {caregiver['first_name']}!</p>
+            <p>You've successfully completed the <strong>{service['title']}</strong> service for <strong>{pet_owner['first_name']}</strong>.</p>
+            <p>Payment will be processed and transferred to your account within 2-3 business days.</p>
+            <p>Thank you for providing excellent pet care!</p>
+            """
+        )
+    except Exception as e:
+        logger.error(f"Failed to send completion emails: {e}")
+
 
 # Payment endpoints
 @api_router.post("/payments/create-intent")
