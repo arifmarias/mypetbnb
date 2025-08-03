@@ -78,7 +78,7 @@ const OAuthCallback = () => {
     };
 
     handleOAuthCallback();
-  }, [login, showToast]);
+  }, [login, toast]);
 
   if (processing) {
     return (
