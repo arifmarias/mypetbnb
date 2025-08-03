@@ -18,7 +18,8 @@ const EditProfileScreen = ({ navigation }) => {
   const toast = useToast();
   
   const [formData, setFormData] = useState({
-    full_name: user?.full_name || '',
+    first_name: user?.first_name || '',
+    last_name: user?.last_name || '',
     email: user?.email || '',
     phone: user?.phone || '',
     bio: user?.bio || '',
