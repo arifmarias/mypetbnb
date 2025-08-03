@@ -93,12 +93,18 @@ const AuthModal = ({ mode, onClose, onSwitchMode }) => {
           password: formData.password
         });
       } else {
+        // Split full name into first and last name for backend compatibility
+        const nameParts = formData.full_name.trim().split(' ');
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+        
         result = await register({
           email: formData.email,
           password: formData.password,
-          full_name: formData.full_name,
+          first_name: firstName,
+          last_name: lastName,
           phone: formData.phone,
-          role: formData.role
+          user_type: formData.role
         });
       }
 
