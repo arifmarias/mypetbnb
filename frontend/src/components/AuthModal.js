@@ -112,11 +112,6 @@ const AuthModal = ({ mode, onClose, onSwitchMode }) => {
     }
   };
 
-  const handleGoogleLogin = () => {
-    // TODO: Implement Google OAuth
-    console.log('Google login not implemented yet');
-  };
-
   return (
     <div className="modal-overlay">
       <div className="modal-content">
