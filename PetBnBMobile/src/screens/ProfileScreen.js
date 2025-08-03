@@ -154,7 +154,7 @@ const ProfileScreen = ({ navigation }) => {
             </View>
             
             <View style={styles.profileInfo}>
-              <Text style={styles.userName}>{user?.full_name || 'User'}</Text>
+              <Text style={styles.userName}>{user ? `${user.first_name} ${user.last_name}` : 'User'}</Text>
               <Text style={styles.userEmail}>{user?.email || 'user@example.com'}</Text>
               <View style={styles.roleContainer}>
                 <Ionicons 
