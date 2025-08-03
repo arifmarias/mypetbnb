@@ -621,6 +621,11 @@ async def create_booking(booking_data: BookingCreate, current_user: dict = Depen
         if current_user.get("user_type") != "pet_owner":
             raise HTTPException(status_code=403, detail="Only pet owners can create bookings")
         
+        # Check email verification
+        user_result = await db.table("users").select("email_verified").eq("id", current_user["user_id"]).execute()
+        if not user_result.data or not user_result.data[0].get("email_verified"):
+            raise HTTPException(status_code=403, detail="Email verification required to create bookings")
+        
         # Get service details
         service_result = await db.table("caregiver_services").select("*").eq("id", str(booking_data.service_id)).execute()
         if not service_result.data:
