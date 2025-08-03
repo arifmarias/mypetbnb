@@ -23,6 +23,7 @@ const RegisterScreen = ({ navigation }) => {
     first_name: '',
     last_name: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: '',
     role: 'pet_owner',
