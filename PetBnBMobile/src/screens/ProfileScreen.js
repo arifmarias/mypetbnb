@@ -145,7 +145,7 @@ const ProfileScreen = ({ navigation }) => {
             <View style={styles.avatarContainer}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
-                  {user?.full_name?.split(' ').map(n => n.charAt(0)).join('') || 'U'}
+                  {(user?.first_name?.charAt(0) || '') + (user?.last_name?.charAt(0) || '') || 'U'}
                 </Text>
               </View>
               <TouchableOpacity style={styles.avatarEditButton}>
