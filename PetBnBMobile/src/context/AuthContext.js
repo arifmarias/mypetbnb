@@ -82,7 +82,7 @@ export const AuthProvider = ({ children }) => {
       console.error('Login failed:', error);
       return { 
         success: false, 
-        error: error.response?.data?.detail || 'Login failed' 
+        error: formatErrorMessage(error)
       };
     }
   };
