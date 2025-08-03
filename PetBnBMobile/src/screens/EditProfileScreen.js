@@ -92,12 +92,22 @@ const EditProfileScreen = ({ navigation }) => {
           <Text style={styles.sectionTitle}>Basic Information</Text>
           
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Full Name</Text>
+            <Text style={styles.label}>First Name</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your full name"
-              value={formData.full_name}
-              onChangeText={(value) => handleInputChange('full_name', value)}
+              placeholder="Enter your first name"
+              value={formData.first_name}
+              onChangeText={(value) => handleInputChange('first_name', value)}
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Last Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your last name"
+              value={formData.last_name}
+              onChangeText={(value) => handleInputChange('last_name', value)}
             />
           </View>
 
