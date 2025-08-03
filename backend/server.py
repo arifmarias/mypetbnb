@@ -188,7 +188,7 @@ async def register(user_data: UserCreate, background_tasks: BackgroundTasks, db=
         
         # Send verification email for new users
         background_tasks.add_task(
-            send_verification_email,
+            send_verification_email_helper,
             created_user['id'],
             user_data.email,
             user_data.first_name,
