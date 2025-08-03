@@ -452,6 +452,8 @@ async def get_id_verification_status(current_user: dict = Depends(get_current_us
                 "admin_notes": None
             }
             
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Get ID verification status error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get ID verification status")
