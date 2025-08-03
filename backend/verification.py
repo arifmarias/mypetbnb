@@ -9,8 +9,13 @@ import httpx
 import smtplib
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-from email.mime.text import MimeText
-from email.mime.multipart import MimeMultipart
+try:
+    from email.mime.text import MimeText
+    from email.mime.multipart import MimeMultipart
+except ImportError:
+    # Fallback for different Python versions
+    from email.mime.text import MIMEText as MimeText
+    from email.mime.multipart import MIMEMultipart as MimeMultipart
 from supabase import AsyncClient
 from fastapi import HTTPException
 import logging
