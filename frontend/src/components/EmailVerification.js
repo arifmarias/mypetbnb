@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { useToast } from '../context/ToastContext';
+import { useToast } from '../components/Toast';
 import { CheckCircle, XCircle, Mail, RotateCcw } from 'lucide-react';
 
 const EmailVerification = () => {
