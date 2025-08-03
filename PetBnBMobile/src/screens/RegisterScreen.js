@@ -60,6 +60,7 @@ const RegisterScreen = ({ navigation }) => {
         first_name: formData.first_name,
         last_name: formData.last_name,
         email: formData.email.toLowerCase(),
+        phone: formData.phone,
         password: formData.password,
         user_type: formData.role,
       });
