@@ -55,7 +55,7 @@ const EmailVerification = () => {
     try {
       const token = localStorage.getItem('access_token');
       if (!token) {
-        showToast('Please log in to resend verification email', 'error');
+        toast.error('Please log in to resend verification email');
         return;
       }
 
