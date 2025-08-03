@@ -54,12 +54,11 @@ const OAuthCallback = () => {
         }
 
         // Show success message
-        showToast(
-          data.email_verified 
-            ? 'Successfully signed in with Google!' 
-            : 'Signed in with Google! Please verify your email to access all features.',
-          data.email_verified ? 'success' : 'info'
-        );
+        if (data.email_verified) {
+          toast.success('Successfully signed in with Google!');
+        } else {
+          toast.info('Signed in with Google! Please verify your email to access all features.');
+        }
 
         // Redirect to appropriate dashboard or home
         window.location.href = '/dashboard';
