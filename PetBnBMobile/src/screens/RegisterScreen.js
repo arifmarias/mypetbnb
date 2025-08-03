@@ -37,7 +37,7 @@ const RegisterScreen = ({ navigation }) => {
 
   const handleRegister = async () => {
     // Validation
-    if (!formData.full_name || !formData.email || !formData.password || !formData.confirmPassword) {
+    if (!formData.first_name || !formData.last_name || !formData.email || !formData.password || !formData.confirmPassword) {
       toast.error('Please fill in all fields');
       return;
     }
