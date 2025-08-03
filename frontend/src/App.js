@@ -144,6 +144,10 @@ function App() {
                   path="/oauth-callback" 
                   element={<OAuthCallback />} 
                 />
+                <Route 
+                  path="/verify-email" 
+                  element={<EmailVerification />} 
+                />
               </Routes>
             </main>
 
