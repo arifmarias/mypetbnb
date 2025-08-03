@@ -40,6 +40,7 @@ from models import (
     LocationSearch, ServiceType
 )
 from auth import AuthService, get_current_user
+from verification import verification_service, oauth_service
 
 # Load environment variables
 ROOT_DIR = Path(__file__).parent
