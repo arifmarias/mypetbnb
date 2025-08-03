@@ -718,11 +718,11 @@ class PetBnBAPITester:
         return send_success and get_success
 
     def run_all_tests(self):
-        """Run all backend tests with focus on authentication"""
-        print("🚀 Starting PetBnB Backend API Tests - Authentication Focus")
-        print("=" * 60)
+        """Run all backend tests with focus on OAuth and verification system"""
+        print("🚀 Starting PetBnB Backend API Tests - OAuth & Verification Focus")
+        print("=" * 70)
         
-        # Run tests in order - prioritizing authentication tests
+        # Run tests in order - prioritizing verification and OAuth tests
         test_methods = [
             self.test_health_check,
             self.test_database_tables_exist,
@@ -732,6 +732,13 @@ class PetBnBAPITester:
             self.test_token_validation_detailed,
             self.test_user_login,
             self.test_get_current_user,
+            # NEW VERIFICATION TESTS - HIGH PRIORITY
+            self.test_email_verification_system,
+            self.test_oauth_integration,
+            self.test_id_verification_system,
+            self.test_verification_requirements,
+            self.test_caregiver_service_verification_requirements,
+            # Updated tests with verification requirements
             self.test_pet_management,
             self.test_caregiver_services,
             self.test_location_search,
@@ -749,9 +756,9 @@ class PetBnBAPITester:
                 self.log_test(test_method.__name__, False, f"Exception: {str(e)}")
         
         # Print summary
-        print("\n" + "=" * 60)
-        print("📊 TEST SUMMARY - AUTHENTICATION FOCUS")
-        print("=" * 60)
+        print("\n" + "=" * 70)
+        print("📊 TEST SUMMARY - OAUTH & VERIFICATION FOCUS")
+        print("=" * 70)
         print(f"Total Tests: {self.tests_run}")
         print(f"Passed: {self.tests_passed}")
         print(f"Failed: {self.tests_run - self.tests_passed}")
@@ -764,12 +771,26 @@ class PetBnBAPITester:
             for test in failed_tests:
                 print(f"  - {test['name']}: {test['details']}")
         
-        # Print authentication-specific summary
-        auth_tests = [test for test in self.test_results if 'auth' in test['name'].lower() or 'token' in test['name'].lower() or 'login' in test['name'].lower()]
-        auth_passed = len([test for test in auth_tests if test['success']])
-        auth_total = len(auth_tests)
+        # Print verification-specific summary
+        verification_tests = [test for test in self.test_results if 
+                            'verification' in test['name'].lower() or 
+                            'oauth' in test['name'].lower() or
+                            'auth' in test['name'].lower() or 
+                            'token' in test['name'].lower() or 
+                            'login' in test['name'].lower()]
+        verification_passed = len([test for test in verification_tests if test['success']])
+        verification_total = len(verification_tests)
         
-        print(f"\n🔐 AUTHENTICATION TESTS: {auth_passed}/{auth_total} passed")
+        print(f"\n🔐 VERIFICATION & OAUTH TESTS: {verification_passed}/{verification_total} passed")
+        
+        # Print specific verification feature summary
+        email_verification_tests = [test for test in self.test_results if 'email' in test['name'].lower() and 'verification' in test['name'].lower()]
+        oauth_tests = [test for test in self.test_results if 'oauth' in test['name'].lower()]
+        id_verification_tests = [test for test in self.test_results if 'id' in test['name'].lower() and 'verification' in test['name'].lower()]
+        
+        print(f"📧 Email Verification Tests: {len([t for t in email_verification_tests if t['success']])}/{len(email_verification_tests)} passed")
+        print(f"🔗 OAuth Integration Tests: {len([t for t in oauth_tests if t['success']])}/{len(oauth_tests)} passed")
+        print(f"🆔 ID Verification Tests: {len([t for t in id_verification_tests if t['success']])}/{len(id_verification_tests)} passed")
         
         return self.tests_passed == self.tests_run
 
