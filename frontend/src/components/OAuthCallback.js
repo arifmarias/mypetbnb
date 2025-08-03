@@ -68,7 +68,7 @@ const OAuthCallback = () => {
         setError(error.message);
         setProcessing(false);
         
-        showToast('OAuth authentication failed: ' + error.message, 'error');
+        toast.error('OAuth authentication failed: ' + error.message);
         
         // Redirect to home after error with timeout
         setTimeout(() => {
