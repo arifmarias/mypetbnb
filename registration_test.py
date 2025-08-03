@@ -54,6 +54,8 @@ class RegistrationTester:
         try:
             if method.upper() == 'POST':
                 response = self.session.post(url, json=data, headers=headers)
+            elif method.upper() == 'GET':
+                response = self.session.get(url, headers=headers)
             else:
                 return False, {"error": f"Unsupported method: {method}"}
             
