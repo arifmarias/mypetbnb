@@ -4,7 +4,7 @@ import { useToast } from '../components/Toast';
 
 const OAuthCallback = () => {
   const { login } = useAuth();
-  const { showToast } = useToast();
+  const toast = useToast();
   const [processing, setProcessing] = useState(true);
   const [error, setError] = useState(null);
 
