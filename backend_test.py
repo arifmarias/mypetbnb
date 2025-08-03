@@ -308,35 +308,235 @@ class PetBnBAPITester:
         return self.log_test("Get Current User", user_data_valid, 
                            f"User type: {response.get('user_type', 'N/A')}")
 
+    def test_email_verification_system(self):
+        """Test email verification system"""
+        print("\n🔍 Testing Email Verification System...")
+        
+        # Test verification status endpoint
+        if not self.pet_owner_token:
+            return self.log_test("Email Verification System", False, "No pet owner token available")
+        
+        # Get verification status
+        success, response = self.make_request('GET', '/api/auth/verification-status', 
+                                            token=self.pet_owner_token, expected_status=200)
+        
+        status_success = self.log_test("Get Verification Status", success, 
+                                     f"Status: {response.get('verification_status', {}).get('email_verified', 'N/A')}")
+        
+        # Test resend verification endpoint
+        success, response = self.make_request('POST', '/api/auth/resend-verification', 
+                                            token=self.pet_owner_token, expected_status=200)
+        
+        resend_success = self.log_test("Resend Verification Email", success, 
+                                     f"Message: {response.get('message', 'N/A')}")
+        
+        # Test email verification endpoint with invalid token
+        verification_data = {"token": "invalid_token_123"}
+        success, response = self.make_request('POST', '/api/auth/verify-email', verification_data, 
+                                            expected_status=400)
+        
+        invalid_token_success = self.log_test("Invalid Verification Token", success, 
+                                            "Correctly rejected invalid token")
+        
+        return status_success and resend_success and invalid_token_success
+
+    def test_oauth_integration(self):
+        """Test OAuth integration endpoints"""
+        print("\n🔍 Testing OAuth Integration...")
+        
+        # Test OAuth endpoint with missing session_id
+        oauth_data = {"user_type": "pet_owner"}
+        success, response = self.make_request('POST', '/api/auth/oauth/emergent', oauth_data, 
+                                            expected_status=400)
+        
+        missing_session_success = self.log_test("OAuth Missing Session ID", success, 
+                                               "Correctly rejected missing session_id")
+        
+        # Test OAuth endpoint with invalid session_id
+        oauth_data = {"session_id": "invalid_session_123", "user_type": "pet_owner"}
+        success, response = self.make_request('POST', '/api/auth/oauth/emergent', oauth_data, 
+                                            expected_status=401)
+        
+        invalid_session_success = self.log_test("OAuth Invalid Session", success, 
+                                               "Correctly rejected invalid session")
+        
+        return missing_session_success and invalid_session_success
+
+    def test_id_verification_system(self):
+        """Test ID verification system for caregivers"""
+        print("\n🔍 Testing ID Verification System...")
+        
+        if not self.caregiver_token:
+            return self.log_test("ID Verification System", False, "No caregiver token available")
+        
+        # Test ID verification status endpoint
+        success, response = self.make_request('GET', '/api/caregiver/id-verification-status', 
+                                            token=self.caregiver_token, expected_status=200)
+        
+        status_success = self.log_test("Get ID Verification Status", success, 
+                                     f"Status: {response.get('status', 'N/A')}")
+        
+        # Test ID verification submission with missing data
+        verification_data = {"document_type": "nric"}  # Missing required fields
+        success, response = self.make_request('POST', '/api/caregiver/submit-id-verification', 
+                                            verification_data, token=self.caregiver_token, 
+                                            expected_status=400)
+        
+        missing_data_success = self.log_test("ID Verification Missing Data", success, 
+                                           "Correctly rejected incomplete data")
+        
+        # Test ID verification submission with invalid document type
+        verification_data = {
+            "document_type": "invalid_type",
+            "id_document_url": "https://example.com/id.jpg",
+            "selfie_url": "https://example.com/selfie.jpg"
+        }
+        success, response = self.make_request('POST', '/api/caregiver/submit-id-verification', 
+                                            verification_data, token=self.caregiver_token, 
+                                            expected_status=400)
+        
+        invalid_type_success = self.log_test("ID Verification Invalid Type", success, 
+                                           "Correctly rejected invalid document type")
+        
+        # Test with pet owner token (should fail)
+        if self.pet_owner_token:
+            success, response = self.make_request('GET', '/api/caregiver/id-verification-status', 
+                                                token=self.pet_owner_token, expected_status=403)
+            
+            role_restriction_success = self.log_test("ID Verification Role Restriction", success, 
+                                                   "Correctly restricted to caregivers only")
+        else:
+            role_restriction_success = True
+        
+        return status_success and missing_data_success and invalid_type_success and role_restriction_success
+
+    def test_verification_requirements(self):
+        """Test that verification is required for key operations"""
+        print("\n🔍 Testing Verification Requirements...")
+        
+        # Create a new unverified user for testing
+        timestamp = datetime.now().strftime("%H%M%S")
+        unverified_user_data = {
+            "email": f"unverified_{timestamp}@test.com",
+            "password": "TestPass123!",
+            "first_name": "Unverified",
+            "last_name": "User",
+            "phone": "+65 9123 4567",
+            "user_type": "pet_owner"
+        }
+        
+        success, response = self.make_request('POST', '/api/auth/register', unverified_user_data, 
+                                            expected_status=200)
+        
+        if not success or 'access_token' not in response:
+            return self.log_test("Verification Requirements", False, "Failed to create test user")
+        
+        unverified_token = response['access_token']
+        
+        # Test pet creation without email verification (should fail)
+        pet_data = {
+            "name": "Test Pet",
+            "species": "dog",
+            "breed": "Test Breed",
+            "age": 2,
+            "weight": 15.0,
+            "gender": "male",
+            "description": "Test pet for verification",
+            "owner_id": response['user_id']
+        }
+        
+        success, response = self.make_request('POST', '/api/pets', pet_data, 
+                                            token=unverified_token, expected_status=403)
+        
+        pet_verification_success = self.log_test("Pet Creation Verification Required", success, 
+                                               "Correctly blocked unverified user from creating pets")
+        
+        # Test booking creation without email verification (should fail)
+        if self.service_id:
+            booking_data = {
+                "pet_ids": ["test-pet-id"],
+                "service_id": self.service_id,
+                "start_datetime": (datetime.utcnow() + timedelta(days=1)).isoformat(),
+                "end_datetime": (datetime.utcnow() + timedelta(days=1, hours=2)).isoformat(),
+                "total_amount": 50.0,
+                "pet_owner_id": response['user_id'],
+                "caregiver_id": "test-caregiver-id",
+                "pet_id": "test-pet-id"
+            }
+            
+            success, response = self.make_request('POST', '/api/bookings', booking_data, 
+                                                token=unverified_token, expected_status=403)
+            
+            booking_verification_success = self.log_test("Booking Creation Verification Required", success, 
+                                                       "Correctly blocked unverified user from creating bookings")
+        else:
+            booking_verification_success = True
+        
+        return pet_verification_success and booking_verification_success
+
+    def test_caregiver_service_verification_requirements(self):
+        """Test that caregiver service creation requires both email and ID verification"""
+        print("\n🔍 Testing Caregiver Service Verification Requirements...")
+        
+        if not self.caregiver_token:
+            return self.log_test("Caregiver Service Verification", False, "No caregiver token available")
+        
+        # Test service creation (should fail due to verification requirements)
+        service_data = {
+            "service_type": "pet_boarding",
+            "service_name": "Test Boarding Service",
+            "title": "Professional Pet Boarding",
+            "description": "Safe and comfortable boarding for your pets",
+            "base_price": 50.0,
+            "duration_minutes": 1440,
+            "max_pets": 3,
+            "service_area_radius": 15.0,
+            "caregiver_id": self.caregiver_id
+        }
+        
+        success, response = self.make_request('POST', '/api/caregiver/services', service_data,
+                                            token=self.caregiver_token, expected_status=403)
+        
+        return self.log_test("Caregiver Service Verification Required", success, 
+                           "Correctly blocked unverified caregiver from creating services")
+
     def test_pet_management(self):
-        """Test pet creation and retrieval"""
+        """Test pet creation and retrieval with verification requirements"""
         print("\n🔍 Testing Pet Management...")
         
         if not self.pet_owner_token:
             return self.log_test("Pet Management", False, "No pet owner token available")
         
-        # Create a pet
+        # Test pet creation (may fail due to email verification requirement)
         pet_data = {
             "name": "Buddy",
+            "species": "dog",
             "breed": "Golden Retriever",
             "age": 3,
             "weight": 25.5,
-            "gender": "Male",
+            "gender": "male",
             "description": "Friendly and energetic dog",
             "medical_info": "Up to date on vaccinations",
-            "behavioral_notes": "Good with children and other pets"
+            "behavioral_notes": "Good with children and other pets",
+            "owner_id": self.pet_owner_id
         }
         
+        # Try to create pet - might fail due to verification requirements
         success, response = self.make_request('POST', '/api/pets', pet_data, 
-                                            token=self.pet_owner_token, expected_status=200)
+                                            token=self.pet_owner_token)
+        
         if success and 'id' in response:
             self.pet_id = response['id']
-        
-        create_success = self.log_test("Pet Creation", success, f"Pet ID: {self.pet_id}")
+            create_success = self.log_test("Pet Creation", True, f"Pet ID: {self.pet_id}")
+        elif response.get('detail') == "Email verification required to create pets":
+            create_success = self.log_test("Pet Creation Verification Block", True, 
+                                         "Correctly blocked pet creation due to email verification requirement")
+        else:
+            create_success = self.log_test("Pet Creation", False, f"Unexpected error: {response.get('detail', 'Unknown')}")
         
         # Get user pets
         success, response = self.make_request('GET', '/api/pets', token=self.pet_owner_token)
-        pets_retrieved = success and isinstance(response, list) and len(response) > 0
+        pets_retrieved = success and isinstance(response, list)
         
         get_success = self.log_test("Get User Pets", pets_retrieved, 
                                   f"Retrieved {len(response) if isinstance(response, list) else 0} pets")
