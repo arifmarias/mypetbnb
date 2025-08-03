@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 
 class PetBnBAPITester:
-    def __init__(self, base_url: str = "https://387c6cb1-495f-4442-86a9-09b27c6e460e.preview.emergentagent.com"):
+    def __init__(self, base_url: str = "http://localhost:8001"):
         self.base_url = base_url
         self.session = requests.Session()
         self.session.headers.update({'Content-Type': 'application/json'})
