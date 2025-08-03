@@ -70,13 +70,13 @@ const EmailVerification = () => {
       const data = await response.json();
 
       if (response.ok) {
-        showToast('Verification email sent! Please check your inbox.', 'success');
+        toast.success('Verification email sent! Please check your inbox.');
       } else {
-        showToast(data.detail || 'Failed to resend verification email', 'error');
+        toast.error(data.detail || 'Failed to resend verification email');
       }
     } catch (error) {
       console.error('Resend verification error:', error);
-      showToast('An error occurred while resending verification email', 'error');
+      toast.error('An error occurred while resending verification email');
     } finally {
       setIsResending(false);
     }
