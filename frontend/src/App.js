@@ -15,6 +15,7 @@ import BookingFlow from './components/BookingFlow';
 import MessagingCenter from './components/MessagingCenter';
 import UserProfile from './components/UserProfile';
 import OAuthCallback from './components/OAuthCallback';
+import EmailVerification from './components/EmailVerification';
 
 // Context
 import { AuthContext } from './context/AuthContext';
