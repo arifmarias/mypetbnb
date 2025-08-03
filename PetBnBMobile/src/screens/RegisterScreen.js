@@ -201,6 +201,21 @@ const RegisterScreen = ({ navigation }) => {
                 </View>
               </View>
 
+              {/* Phone Number */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Phone Number (Optional)</Text>
+                <View style={styles.inputWrapper}>
+                  <Ionicons name="call-outline" size={20} color="#999" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your phone number"
+                    value={formData.phone}
+                    onChangeText={(value) => handleInputChange('phone', value)}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+
               {/* Password */}
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>Password</Text>
