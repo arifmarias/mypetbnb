@@ -88,7 +88,7 @@ const HomeScreen = ({ navigation }) => {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>
-              {user ? `Hello, ${user.full_name.split(' ')[0]}! 👋` : 'Hello! 👋'}
+              {user ? `Hello, ${user.first_name}! 👋` : 'Hello! 👋'}
             </Text>
             <Text style={styles.subgreeting}>Find perfect care for your pet</Text>
           </View>
