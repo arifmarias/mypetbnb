@@ -117,7 +117,7 @@ const CaregiverDashboard = ({ navigation }) => {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>
-              Welcome back, {user?.full_name?.split(' ')[0]}! 👋
+              Welcome back, {user?.first_name}! 👋
             </Text>
             <Text style={styles.subGreeting}>
               Ready to provide amazing pet care today?
