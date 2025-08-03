@@ -176,12 +176,21 @@ async def register(user_data: UserCreate, background_tasks: BackgroundTasks, db=
             }
             await db.table("caregiver_profiles").insert(caregiver_profile).execute()
         
+        # Send verification email for new users
+        background_tasks.add_task(
+            send_verification_email,
+            created_user['id'],
+            user_data.email,
+            user_data.first_name,
+            db
+        )
+        
         # Send welcome email
         background_tasks.add_task(
             send_email,
             user_data.email,
             "Welcome to PetBnB!",
-            f"<h1>Welcome {user_data.first_name}!</h1><p>Thanks for joining PetBnB. We're excited to have you on board!</p>"
+            f"<h1>Welcome {user_data.first_name}!</h1><p>Thanks for joining PetBnB. Please check your email to verify your account!</p>"
         )
         
         access_token = create_access_token(data={
