@@ -107,7 +107,7 @@ export const AuthProvider = ({ children }) => {
       console.error('Registration failed:', error);
       return { 
         success: false, 
-        error: error.response?.data?.detail || 'Registration failed' 
+        error: formatErrorMessage(error)
       };
     }
   };
