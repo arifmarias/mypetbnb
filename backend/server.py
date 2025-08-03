@@ -461,6 +461,11 @@ async def create_pet(pet_data: PetCreate, current_user: dict = Depends(get_curre
         if current_user.get("user_type") != "pet_owner":
             raise HTTPException(status_code=403, detail="Only pet owners can create pets")
         
+        # Check email verification
+        user_result = await db.table("users").select("email_verified").eq("id", current_user["user_id"]).execute()
+        if not user_result.data or not user_result.data[0].get("email_verified"):
+            raise HTTPException(status_code=403, detail="Email verification required to create pets")
+        
         pet_dict = pet_data.dict()
         pet_dict['id'] = str(uuid.uuid4())
         pet_dict['owner_id'] = str(pet_dict['owner_id'])
