@@ -516,6 +516,15 @@ async def create_service(service_data: CaregiverServiceCreate, current_user: dic
         if current_user.get("user_type") != "caregiver":
             raise HTTPException(status_code=403, detail="Only caregivers can create services")
         
+        # Check verification status
+        verification_status = await verification_service.check_user_verification_status(db, current_user["user_id"])
+        
+        if not verification_status.get("email_verified"):
+            raise HTTPException(status_code=403, detail="Email verification required to create services")
+        
+        if verification_status.get("id_verification_status") != "approved":
+            raise HTTPException(status_code=403, detail="ID verification approval required to create services")
+        
         service_dict = service_data.dict()
         service_dict['id'] = str(uuid.uuid4())
         service_dict['caregiver_id'] = str(service_dict['caregiver_id'])
