@@ -17,7 +17,21 @@ const AuthModal = ({ mode, onClose, onSwitchMode }) => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleInputChange = (e) => {
+  const handleGoogleLogin = () => {
+    // Get current URL for redirect
+    const currentUrl = window.location.origin;
+    
+    // Determine user type (default to pet_owner for login, but we'll need to ask during OAuth)
+    const userType = mode === 'register' ? formData.role : 'pet_owner';
+    
+    // Store user type in localStorage for OAuth callback
+    localStorage.setItem('oauth_user_type', userType);
+    localStorage.setItem('oauth_mode', mode);
+    
+    // Redirect to Emergent Auth
+    const redirectUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(currentUrl + '/oauth-callback')}`;
+    window.location.href = redirectUrl;
+  };
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     // Clear error when user starts typing
