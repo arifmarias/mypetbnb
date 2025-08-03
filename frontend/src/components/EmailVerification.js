@@ -5,7 +5,7 @@ import { CheckCircle, XCircle, Mail, RotateCcw } from 'lucide-react';
 
 const EmailVerification = () => {
   const [searchParams] = useSearchParams();
-  const { showToast } = useToast();
+  const toast = useToast();
   const [verificationStatus, setVerificationStatus] = useState('verifying'); // 'verifying', 'success', 'error'
   const [message, setMessage] = useState('');
   const [isResending, setIsResending] = useState(false);
