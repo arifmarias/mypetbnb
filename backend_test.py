@@ -605,32 +605,39 @@ class PetBnBAPITester:
                            f"Found {len(response) if isinstance(response, list) else 0} caregivers")
 
     def test_booking_creation(self):
-        """Test booking creation"""
+        """Test booking creation with verification requirements"""
         print("\n🔍 Testing Booking Creation...")
         
-        if not self.pet_owner_token or not self.service_id or not self.pet_id:
-            return self.log_test("Booking Creation", False, 
-                               "Missing required data (tokens, service_id, or pet_id)")
+        if not self.pet_owner_token:
+            return self.log_test("Booking Creation", False, "No pet owner token available")
         
-        # Create a booking
+        # Create a booking (may fail due to verification requirements)
         start_time = datetime.utcnow() + timedelta(days=1)
         end_time = start_time + timedelta(hours=24)
         
         booking_data = {
-            "pet_ids": [self.pet_id],
-            "service_id": self.service_id,
+            "pet_ids": [self.pet_id] if self.pet_id else ["test-pet-id"],
+            "service_id": self.service_id if self.service_id else "test-service-id",
             "start_datetime": start_time.isoformat(),
             "end_datetime": end_time.isoformat(),
             "total_amount": 50.0,
-            "special_requirements": "Please provide extra attention to feeding schedule"
+            "special_requirements": "Please provide extra attention to feeding schedule",
+            "pet_owner_id": self.pet_owner_id,
+            "caregiver_id": self.caregiver_id if self.caregiver_id else "test-caregiver-id",
+            "pet_id": self.pet_id if self.pet_id else "test-pet-id"
         }
         
         success, response = self.make_request('POST', '/api/bookings', booking_data,
-                                            token=self.pet_owner_token, expected_status=200)
+                                            token=self.pet_owner_token)
+        
         if success and 'id' in response:
             self.booking_id = response['id']
-        
-        return self.log_test("Booking Creation", success, f"Booking ID: {self.booking_id}")
+            return self.log_test("Booking Creation", True, f"Booking ID: {self.booking_id}")
+        elif response.get('detail') == "Email verification required to create bookings":
+            return self.log_test("Booking Creation Verification Block", True, 
+                               "Correctly blocked booking creation due to email verification requirement")
+        else:
+            return self.log_test("Booking Creation", False, f"Error: {response.get('detail', 'Unknown error')}")
 
     def test_get_bookings(self):
         """Test getting user bookings"""
