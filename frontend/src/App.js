@@ -139,6 +139,10 @@ function App() {
                   path="/profile" 
                   element={user ? <UserProfile /> : <Navigate to="/" />} 
                 />
+                <Route 
+                  path="/oauth-callback" 
+                  element={<OAuthCallback />} 
+                />
               </Routes>
             </main>
 
