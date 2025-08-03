@@ -51,6 +51,27 @@ function App() {
     }
   };
 
+  // Helper function to format error messages
+  const formatErrorMessage = (error) => {
+    if (error.response?.data?.detail) {
+      const detail = error.response.data.detail;
+      
+      // Handle Pydantic validation errors (array of error objects)
+      if (Array.isArray(detail)) {
+        return detail.map(err => {
+          const field = err.loc?.slice(-1)[0] || 'field';
+          const message = err.msg || 'Invalid input';
+          return `${field}: ${message}`;
+        }).join(', ');
+      }
+      
+      // Handle simple string errors
+      return typeof detail === 'string' ? detail : 'Registration failed';
+    }
+    
+    return error.message || 'An error occurred';
+  };
+
   const login = async (credentials) => {
     try {
       const response = await axios.post('/api/auth/login', credentials);
