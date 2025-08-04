@@ -23,21 +23,35 @@ const ProfileScreen = ({ navigation }) => {
     totalReviews: 0,
     averageRating: 0,
     memberSince: '2024',
+    totalEarnings: 0,
+    activeServices: 0,
   });
 
   useEffect(() => {
     if (user) {
-      // Mock profile stats - in real app, fetch from API
-      setProfileStats({
-        completedBookings: user.role === 'pet_owner' ? 12 : 48,
-        totalReviews: user.role === 'pet_owner' ? 8 : 32,
-        averageRating: user.role === 'pet_owner' ? 4.8 : 4.9,
-        memberSince: '2024',
-      });
+      // Mock profile stats - replace with API calls
+      if (user.role === 'pet_owner') {
+        setProfileStats({
+          completedBookings: 12,
+          totalReviews: 8,
+          averageRating: 4.8,
+          memberSince: '2024',
+        });
+      } else {
+        setProfileStats({
+          completedBookings: 48,
+          totalReviews: 32,
+          averageRating: 4.9,
+          memberSince: '2024',
+          totalEarnings: 2400,
+          activeServices: 5,
+        });
+      }
     }
   }, [user]);
 
-  const menuItems = [
+  // Pet Owner Menu Items
+  const petOwnerMenuItems = [
     {
       id: 'edit_profile',
       title: 'Edit Profile',
@@ -49,14 +63,6 @@ const ProfileScreen = ({ navigation }) => {
       title: 'My Pets',
       icon: 'heart-outline',
       onPress: () => navigation.navigate('MyPets'),
-      showForRole: 'pet_owner',
-    },
-    {
-      id: 'my_services',
-      title: 'My Services',
-      icon: 'grid-outline',
-      onPress: () => navigation.navigate('MyServices'),
-      showForRole: 'caregiver',
     },
     {
       id: 'booking_management',
@@ -71,10 +77,16 @@ const ProfileScreen = ({ navigation }) => {
       onPress: () => navigation.navigate('BookingHistory'),
     },
     {
-      id: 'reviews',
-      title: 'Reviews & Ratings',
+      id: 'favorites',
+      title: 'Favorite Caregivers',
+      icon: 'bookmark-outline',
+      onPress: () => navigation.navigate('Favorites'),
+    },
+    {
+      id: 'reviews_given',
+      title: 'My Reviews',
       icon: 'star-outline',
-      onPress: () => navigation.navigate('Reviews'),
+      onPress: () => navigation.navigate('MyReviews'),
     },
     {
       id: 'payment_methods',
@@ -82,6 +94,68 @@ const ProfileScreen = ({ navigation }) => {
       icon: 'card-outline',
       onPress: () => navigation.navigate('PaymentMethods'),
     },
+    {
+      id: 'emergency_contacts',
+      title: 'Emergency Contacts',
+      icon: 'call-outline',
+      onPress: () => navigation.navigate('EmergencyContacts'),
+    },
+  ];
+
+  // Caregiver Menu Items
+  const caregiverMenuItems = [
+    {
+      id: 'edit_profile',
+      title: 'Edit Profile',
+      icon: 'person-outline',
+      onPress: () => navigation.navigate('EditProfile'),
+    },
+    {
+      id: 'my_services',
+      title: 'My Services',
+      icon: 'grid-outline',
+      onPress: () => navigation.navigate('MyServices'),
+    },
+    {
+      id: 'calendar',
+      title: 'Calendar & Availability',
+      icon: 'calendar-outline',
+      onPress: () => navigation.navigate('Calendar'),
+    },
+    {
+      id: 'booking_management',
+      title: 'Booking Management',
+      icon: 'clipboard-outline',
+      onPress: () => navigation.navigate('BookingManagement'),
+    },
+    {
+      id: 'earnings',
+      title: 'Earnings & Payouts',
+      icon: 'wallet-outline',
+      onPress: () => navigation.navigate('Earnings'),
+    },
+    {
+      id: 'reviews_received',
+      title: 'Reviews & Ratings',
+      icon: 'star-outline',
+      onPress: () => navigation.navigate('Reviews'),
+    },
+    {
+      id: 'certifications',
+      title: 'Certifications',
+      icon: 'ribbon-outline',
+      onPress: () => navigation.navigate('Certifications'),
+    },
+    {
+      id: 'background_check',
+      title: 'Background Verification',
+      icon: 'shield-checkmark-outline',
+      onPress: () => navigation.navigate('BackgroundCheck'),
+    },
+  ];
+
+  // Common Menu Items
+  const commonMenuItems = [
     {
       id: 'settings',
       title: 'Settings',
@@ -127,8 +201,90 @@ const ProfileScreen = ({ navigation }) => {
     );
   };
 
-  const filteredMenuItems = menuItems.filter(item => 
-    !item.showForRole || item.showForRole === user?.role
+  const handleRoleSwitch = () => {
+    Alert.alert(
+      'Switch Role',
+      user?.role === 'pet_owner' 
+        ? 'Become a Pet Caregiver and start earning by providing pet care services.'
+        : 'Switch back to Pet Owner mode to book services for your pets.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: user?.role === 'pet_owner' ? 'Become Caregiver' : 'Switch to Pet Owner',
+          onPress: () => {
+            // This would make an API call to switch roles
+            toast.success('Role switch request submitted for review');
+          },
+        },
+      ]
+    );
+  };
+
+  const menuItems = user?.role === 'pet_owner' ? petOwnerMenuItems : caregiverMenuItems;
+  const allMenuItems = [...menuItems, ...commonMenuItems];
+
+  const renderStatsSection = () => {
+    if (user?.role === 'pet_owner') {
+      return (
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{profileStats.completedBookings}</Text>
+            <Text style={styles.statLabel}>Services Used</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{profileStats.totalReviews}</Text>
+            <Text style={styles.statLabel}>Reviews Given</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <View style={styles.ratingContainer}>
+              <Ionicons name="star" size={16} color="#FFD700" />
+              <Text style={styles.statNumber}>{profileStats.averageRating}</Text>
+            </View>
+            <Text style={styles.statLabel}>My Rating</Text>
+          </View>
+        </View>
+      );
+    } else {
+      return (
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>RM{profileStats.totalEarnings}</Text>
+            <Text style={styles.statLabel}>Total Earned</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>{profileStats.completedBookings}</Text>
+            <Text style={styles.statLabel}>Services Provided</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statItem}>
+            <View style={styles.ratingContainer}>
+              <Ionicons name="star" size={16} color="#FFD700" />
+              <Text style={styles.statNumber}>{profileStats.averageRating}</Text>
+            </View>
+            <Text style={styles.statLabel}>Rating</Text>
+          </View>
+        </View>
+      );
+    }
+  };
+
+  const renderMenuItem = (item) => (
+    <TouchableOpacity
+      key={item.id}
+      style={styles.menuItem}
+      onPress={item.onPress}
+    >
+      <View style={styles.menuItemLeft}>
+        <View style={styles.menuIconContainer}>
+          <Ionicons name={item.icon} size={22} color="#666" />
+        </View>
+        <Text style={styles.menuItemText}>{item.title}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color="#CCC" />
+    </TouchableOpacity>
   );
 
   return (
@@ -136,7 +292,7 @@ const ProfileScreen = ({ navigation }) => {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>My Profile</Text>
+          <Text style={styles.headerTitle}>Profile</Text>
           <TouchableOpacity 
             style={styles.editButton}
             onPress={() => navigation.navigate('EditProfile')}
@@ -160,7 +316,9 @@ const ProfileScreen = ({ navigation }) => {
             </View>
             
             <View style={styles.profileInfo}>
-              <Text style={styles.userName}>{user ? `${user.first_name} ${user.last_name}` : 'User'}</Text>
+              <Text style={styles.userName}>
+                {user ? `${user.first_name} ${user.last_name}` : 'User'}
+              </Text>
               <Text style={styles.userEmail}>{user?.email || 'user@example.com'}</Text>
               <View style={styles.roleContainer}>
                 <Ionicons 
@@ -171,93 +329,81 @@ const ProfileScreen = ({ navigation }) => {
                 <Text style={styles.roleText}>
                   {user?.role === 'pet_owner' ? 'Pet Owner' : 'Pet Caregiver'}
                 </Text>
+                {user?.role === 'caregiver' && (
+                  <View style={styles.verifiedBadge}>
+                    <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                    <Text style={styles.verifiedText}>Verified</Text>
+                  </View>
+                )}
               </View>
+              <Text style={styles.memberSince}>
+                Member since {profileStats.memberSince}
+              </Text>
             </View>
           </View>
 
           {/* Stats */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{profileStats.completedBookings}</Text>
-              <Text style={styles.statLabel}>
-                {user?.role === 'pet_owner' ? 'Bookings' : 'Jobs Completed'}
+          {renderStatsSection()}
+        </View>
+
+        {/* Role Switch Card */}
+        <View style={styles.roleSwitchCard}>
+          <View style={styles.roleSwitchHeader}>
+            <Ionicons 
+              name={user?.role === 'pet_owner' ? 'business-outline' : 'home-outline'} 
+              size={24} 
+              color="#FF5A5F" 
+            />
+            <View style={styles.roleSwitchInfo}>
+              <Text style={styles.roleSwitchTitle}>
+                {user?.role === 'pet_owner' ? 'Become a Pet Caregiver' : 'Switch to Pet Owner'}
+              </Text>
+              <Text style={styles.roleSwitchSubtitle}>
+                {user?.role === 'pet_owner' 
+                  ? 'Start earning by providing pet care services'
+                  : 'Book services for your pets'
+                }
               </Text>
             </View>
-            <View style={[styles.statItem, styles.statItemBorder]}>
-              <Text style={styles.statNumber}>{profileStats.averageRating}</Text>
-              <View style={styles.ratingContainer}>
-                <Ionicons name="star" size={14} color="#FFD700" />
-                <Text style={styles.statLabel}>Rating</Text>
-              </View>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{profileStats.totalReviews}</Text>
-              <Text style={styles.statLabel}>Reviews</Text>
-            </View>
           </View>
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.quickActionButton}>
-            <Ionicons name="qr-code-outline" size={24} color="#FF5A5F" />
-            <Text style={styles.quickActionText}>QR Code</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionButton}>
-            <Ionicons name="share-outline" size={24} color="#FF5A5F" />
-            <Text style={styles.quickActionText}>Share Profile</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionButton}>
-            <Ionicons name="bookmark-outline" size={24} color="#FF5A5F" />
-            <Text style={styles.quickActionText}>Saved</Text>
+          <TouchableOpacity style={styles.roleSwitchButton} onPress={handleRoleSwitch}>
+            <Text style={styles.roleSwitchButtonText}>
+              {user?.role === 'pet_owner' ? 'Get Started' : 'Switch Mode'}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Settings */}
+        {/* Menu Items */}
+        <View style={styles.menuSection}>
+          {allMenuItems.map(renderMenuItem)}
+        </View>
+
+        {/* Notification Settings */}
         <View style={styles.settingsSection}>
           <View style={styles.settingItem}>
             <View style={styles.settingLeft}>
-              <Ionicons name="notifications-outline" size={24} color="#333" />
+              <Ionicons name="notifications-outline" size={22} color="#666" />
               <Text style={styles.settingText}>Push Notifications</Text>
             </View>
             <Switch
               value={notifications}
               onValueChange={setNotifications}
-              trackColor={{ false: '#E5E5E5', true: '#FF5A5F' }}
-              thumbColor={notifications ? 'white' : '#f4f3f4'}
+              trackColor={{ false: '#E5E7EB', true: '#FF5A5F40' }}
+              thumbColor={notifications ? '#FF5A5F' : '#9CA3AF'}
             />
           </View>
         </View>
 
-        {/* Menu Items */}
-        <View style={styles.menuSection}>
-          {filteredMenuItems.map((item) => (
-            <TouchableOpacity 
-              key={item.id} 
-              style={styles.menuItem}
-              onPress={item.onPress}
-            >
-              <View style={styles.menuLeft}>
-                <Ionicons name={item.icon} size={24} color="#333" />
-                <Text style={styles.menuText}>{item.title}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#999" />
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Logout */}
+        {/* Logout Button */}
         <View style={styles.logoutSection}>
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={24} color="#FF5A5F" />
+            <Ionicons name="log-out-outline" size={22} color="#FF5A5F" />
             <Text style={styles.logoutText}>Sign Out</Text>
           </TouchableOpacity>
         </View>
 
-        {/* App Version */}
-        <View style={styles.versionContainer}>
-          <Text style={styles.versionText}>PetBnB v1.0.0</Text>
-        </View>
+        {/* Bottom Padding */}
+        <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -266,15 +412,14 @@ const ProfileScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9F9F9',
+    backgroundColor: '#F8F9FA',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingVertical: 20,
     backgroundColor: 'white',
   },
   headerTitle: {
@@ -287,15 +432,13 @@ const styles = StyleSheet.create({
   },
   profileSection: {
     backgroundColor: 'white',
-    marginBottom: 12,
-    paddingBottom: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
   },
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 24,
+    paddingVertical: 20,
   },
   avatarContainer: {
     position: 'relative',
@@ -310,7 +453,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     color: 'white',
   },
@@ -321,7 +464,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#FF5A5F',
+    backgroundColor: '#333',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -331,7 +474,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   userName: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 4,
@@ -344,36 +487,47 @@ const styles = StyleSheet.create({
   roleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FF5A5F10',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    alignSelf: 'flex-start',
+    marginBottom: 4,
   },
   roleText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#FF5A5F',
     fontWeight: '600',
     marginLeft: 6,
   },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+  verifiedText: {
+    fontSize: 14,
+    color: '#10B981',
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  memberSince: {
+    fontSize: 14,
+    color: '#666',
+  },
   statsContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    backgroundColor: '#F8F9FA',
+    padding: 20,
+    borderRadius: 12,
+    marginTop: 16,
   },
   statItem: {
     flex: 1,
     alignItems: 'center',
   },
-  statItemBorder: {
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: '#F0F0F0',
+  statDivider: {
+    width: 1,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 16,
   },
   statNumber: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 4,
@@ -381,98 +535,151 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 14,
     color: '#666',
+    textAlign: 'center',
   },
   ratingContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
   },
-  quickActions: {
-    flexDirection: 'row',
+  roleSwitchCard: {
     backgroundColor: 'white',
-    marginBottom: 12,
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    gap: 20,
-  },
-  quickActionButton: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 16,
-    backgroundColor: '#F9F9F9',
+    marginHorizontal: 20,
+    marginTop: 20,
+    padding: 20,
     borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  quickActionText: {
+  roleSwitchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  roleSwitchInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  roleSwitchTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  roleSwitchSubtitle: {
     fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  roleSwitchButton: {
+    backgroundColor: '#FF5A5F',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  roleSwitchButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  menuSection: {
+    backgroundColor: 'white',
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  menuItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  menuIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F8F9FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  menuItemText: {
+    fontSize: 16,
     color: '#333',
     fontWeight: '500',
-    marginTop: 8,
   },
   settingsSection: {
     backgroundColor: 'white',
-    marginBottom: 12,
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   settingItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 16,
   },
   settingLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   settingText: {
     fontSize: 16,
     color: '#333',
-    marginLeft: 16,
-  },
-  menuSection: {
-    backgroundColor: 'white',
-    marginBottom: 12,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  menuLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  menuText: {
-    fontSize: 16,
-    color: '#333',
+    fontWeight: '500',
     marginLeft: 16,
   },
   logoutSection: {
-    backgroundColor: 'white',
-    marginBottom: 12,
+    marginHorizontal: 20,
+    marginTop: 20,
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    justifyContent: 'center',
+    backgroundColor: 'white',
     paddingVertical: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FF5A5F20',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   logoutText: {
     fontSize: 16,
     color: '#FF5A5F',
     fontWeight: '600',
-    marginLeft: 16,
+    marginLeft: 8,
   },
-  versionContainer: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  versionText: {
-    fontSize: 14,
-    color: '#999',
+  bottomPadding: {
+    height: 40,
   },
 });
 

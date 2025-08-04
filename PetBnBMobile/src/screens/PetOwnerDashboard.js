@@ -6,60 +6,93 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
+  Image,
+  FlatList,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 const PetOwnerDashboard = ({ navigation }) => {
   const { user } = useAuth();
+  const toast = useToast();
+  const [upcomingBookings, setUpcomingBookings] = useState([]);
+  const [recentBookings, setRecentBookings] = useState([]);
   const [stats, setStats] = useState({
-    totalPets: 3,
-    totalBookings: 12,
-    upcomingBookings: 2,
-    totalSpent: 650,
+    totalBookings: 0,
+    activePets: 0,
+    upcomingServices: 0,
+    totalSpent: 0,
   });
 
-  const upcomingBookings = [
-    {
-      id: '1',
-      service: 'Pet Boarding',
-      date: 'Dec 30, 2024',
-      time: '2:00 PM',
-      caregiver: 'Sarah Johnson',
-      status: 'confirmed',
-      pets: ['Buddy', 'Luna'],
-    },
-    {
-      id: '2',
-      service: 'Dog Walking',
-      date: 'Dec 29, 2024',
-      time: '3:00 PM',
-      caregiver: 'Michael Chen',
-      status: 'pending',
-      pets: ['Max'],
-    },
-  ];
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
 
-  const myPets = [
-    {
-      id: '1',
-      name: 'Buddy',
-      breed: 'Golden Retriever',
-      age: 3,
-    },
-    {
-      id: '2',
-      name: 'Luna',
-      breed: 'Persian Cat',
-      age: 2,
-    },
-    {
-      id: '3',
-      name: 'Max',
-      breed: 'Labrador',
-      age: 5,
-    },
-  ];
+  const loadDashboardData = () => {
+    // Mock data - replace with API calls
+    setStats({
+      totalBookings: 12,
+      activePets: 3,
+      upcomingServices: 2,
+      totalSpent: 650,
+    });
+
+    setUpcomingBookings([
+      {
+        id: '1',
+        service: 'Pet Boarding',
+        date: 'Dec 30, 2024',
+        time: '2:00 PM',
+        caregiver: {
+          name: 'Sarah Johnson',
+          rating: 4.9,
+          image: null,
+        },
+        location: 'Petaling Jaya',
+        status: 'confirmed',
+        pets: ['Buddy', 'Luna'],
+        amount: 150,
+      },
+      {
+        id: '2',
+        service: 'Dog Walking',
+        date: 'Dec 29, 2024',
+        time: '3:00 PM',
+        caregiver: {
+          name: 'Michael Chen',
+          rating: 4.8,
+          image: null,
+        },
+        location: 'Kuala Lumpur',
+        status: 'pending',
+        pets: ['Max'],
+        amount: 25,
+      },
+    ]);
+
+    setRecentBookings([
+      {
+        id: '3',
+        service: 'Pet Grooming',
+        date: 'Dec 20, 2024',
+        caregiver: 'Lisa Wong',
+        status: 'completed',
+        rating: 5,
+        amount: 80,
+      },
+      {
+        id: '4',
+        service: 'Pet Sitting',
+        date: 'Dec 15, 2024',
+        caregiver: 'Ahmad Rahman',
+        status: 'completed',
+        rating: 4,
+        amount: 60,
+      },
+    ]);
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -69,10 +102,59 @@ const PetOwnerDashboard = ({ navigation }) => {
         return '#F59E0B';
       case 'in_progress':
         return '#3B82F6';
+      case 'completed':
+        return '#6B7280';
       default:
         return '#6B7280';
     }
   };
+
+  const renderUpcomingBooking = ({ item }) => (
+    <TouchableOpacity 
+      style={styles.bookingCard}
+      onPress={() => navigation.navigate('BookingDetails', { bookingId: item.id })}
+    >
+      <View style={styles.bookingHeader}>
+        <View style={styles.bookingInfo}>
+          <Text style={styles.serviceName}>{item.service}</Text>
+          <Text style={styles.bookingDate}>{item.date} at {item.time}</Text>
+          <Text style={styles.caregiverName}>{item.caregiver.name}</Text>
+          <Text style={styles.location}>{item.location}</Text>
+        </View>
+        <View style={styles.bookingRight}>
+          <Text style={styles.amount}>RM{item.amount}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+            <Text style={styles.statusText}>{item.status}</Text>
+          </View>
+        </View>
+      </View>
+      <View style={styles.petsInfo}>
+        <Text style={styles.petsLabel}>Pets: {item.pets.join(', ')}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderRecentBooking = ({ item }) => (
+    <TouchableOpacity 
+      style={styles.recentBookingCard}
+      onPress={() => navigation.navigate('BookingDetails', { bookingId: item.id })}
+    >
+      <View style={styles.recentBookingInfo}>
+        <Text style={styles.recentServiceName}>{item.service}</Text>
+        <Text style={styles.recentDate}>{item.date}</Text>
+        <Text style={styles.recentCaregiver}>by {item.caregiver}</Text>
+      </View>
+      <View style={styles.recentBookingRight}>
+        <Text style={styles.recentAmount}>RM{item.amount}</Text>
+        {item.rating && (
+          <View style={styles.ratingContainer}>
+            <Ionicons name="star" size={12} color="#FFD700" />
+            <Text style={styles.ratingText}>{item.rating}</Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -80,212 +162,120 @@ const PetOwnerDashboard = ({ navigation }) => {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>
-              Welcome back, {user?.first_name}! 👋
-            </Text>
-            <Text style={styles.subGreeting}>
-              Manage your pets and bookings
-            </Text>
+            <Text style={styles.greeting}>Hi, {user?.first_name}! 👋</Text>
+            <Text style={styles.subGreeting}>Find the perfect care for your pets</Text>
           </View>
-          <TouchableOpacity style={styles.profileButton}>
-            <Ionicons name="person-circle-outline" size={32} color="#FF5A5F" />
+          <TouchableOpacity 
+            style={styles.notificationButton}
+            onPress={() => navigation.navigate('Notifications')}
+          >
+            <Ionicons name="notifications-outline" size={24} color="#333" />
+            <View style={styles.notificationBadge} />
           </TouchableOpacity>
         </View>
 
-        {/* Quick Stats */}
+        {/* Stats Cards */}
         <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Ionicons name="heart" size={24} color="#FF5A5F" />
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>{stats.totalBookings}</Text>
+              <Text style={styles.statLabel}>Total Bookings</Text>
             </View>
-            <Text style={styles.statNumber}>{stats.totalPets}</Text>
-            <Text style={styles.statLabel}>My Pets</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Ionicons name="calendar" size={24} color="#3B82F6" />
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>{stats.activePets}</Text>
+              <Text style={styles.statLabel}>My Pets</Text>
             </View>
-            <Text style={styles.statNumber}>{stats.totalBookings}</Text>
-            <Text style={styles.statLabel}>Total Bookings</Text>
           </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Ionicons name="time" size={24} color="#10B981" />
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>{stats.upcomingServices}</Text>
+              <Text style={styles.statLabel}>Upcoming</Text>
             </View>
-            <Text style={styles.statNumber}>{stats.upcomingBookings}</Text>
-            <Text style={styles.statLabel}>Upcoming</Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statIcon}>
-              <Ionicons name="wallet" size={24} color="#8B5CF6" />
+            <View style={styles.statCard}>
+              <Text style={styles.statNumber}>RM{stats.totalSpent}</Text>
+              <Text style={styles.statLabel}>Total Spent</Text>
             </View>
-            <Text style={styles.statNumber}>${stats.totalSpent}</Text>
-            <Text style={styles.statLabel}>Total Spent</Text>
           </View>
-        </View>
-
-        {/* Upcoming Bookings */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Search')}>
-              <Text style={styles.seeAllText}>Book Care</Text>
-            </TouchableOpacity>
-          </View>
-
-          {upcomingBookings.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="calendar-outline" size={48} color="#E5E5E5" />
-              <Text style={styles.emptyStateText}>No upcoming bookings</Text>
-              <TouchableOpacity 
-                style={styles.emptyStateButton}
-                onPress={() => navigation.navigate('Search')}
-              >
-                <Text style={styles.emptyStateButtonText}>Find a Caregiver</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            upcomingBookings.map((booking) => (
-              <TouchableOpacity 
-                    key={booking.id} 
-                    style={styles.bookingCard}
-                    onPress={() => navigation.navigate('BookingDetails', { bookingId: booking.id })}
-                  >
-                <View style={styles.bookingHeader}>
-                  <View style={styles.bookingInfo}>
-                    <Text style={styles.bookingService}>{booking.service}</Text>
-                    <Text style={styles.bookingCaregiver}>by {booking.caregiver}</Text>
-                  </View>
-                  <View 
-                    style={[
-                      styles.statusBadge, 
-                      { backgroundColor: getStatusColor(booking.status) + '20' }
-                    ]}
-                  >
-                    <Text 
-                      style={[
-                        styles.statusText, 
-                        { color: getStatusColor(booking.status) }
-                      ]}
-                    >
-                      {booking.status.toUpperCase()}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.bookingDetails}>
-                  <View style={styles.bookingDetailItem}>
-                    <Ionicons name="calendar-outline" size={16} color="#666" />
-                    <Text style={styles.bookingDetailText}>
-                      {booking.date} at {booking.time}
-                    </Text>
-                  </View>
-                  <View style={styles.bookingDetailItem}>
-                    <Ionicons name="heart-outline" size={16} color="#666" />
-                    <Text style={styles.bookingDetailText}>
-                      {booking.pets.join(', ')}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.bookingActions}>
-                  <TouchableOpacity style={styles.actionButton}>
-                    <Ionicons name="chatbubble-outline" size={18} color="#FF5A5F" />
-                    <Text style={styles.actionButtonText}>Message</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.actionButton}>
-                    <Ionicons name="eye-outline" size={18} color="#666" />
-                    <Text style={[styles.actionButtonText, { color: '#666' }]}>
-                      View Details
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
-
-        {/* My Pets */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>My Pets</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('AddPet')}>
-              <Text style={styles.seeAllText}>Add Pet</Text>
-            </TouchableOpacity>
-          </View>
-
-          {myPets.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="heart-outline" size={48} color="#E5E5E5" />
-              <Text style={styles.emptyStateText}>No pets added yet</Text>
-              <TouchableOpacity 
-                style={styles.emptyStateButton}
-                onPress={() => navigation.navigate('AddPet')}
-              >
-                <Text style={styles.emptyStateButtonText}>Add Your First Pet</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.petsContainer}>
-                {myPets.map((pet) => (
-                  <TouchableOpacity 
-                  key={pet.id} 
-                  style={styles.petCard}
-                  onPress={() => navigation.navigate('PetDetails', { petId: pet.id })}
-                >
-                    <View style={styles.petAvatar}>
-                      <Text style={styles.petAvatarText}>{pet.name.charAt(0)}</Text>
-                    </View>
-                    <Text style={styles.petName}>{pet.name}</Text>
-                    <Text style={styles.petBreed}>{pet.breed}</Text>
-                    <Text style={styles.petAge}>{pet.age} years old</Text>
-                  </TouchableOpacity>
-                ))}
-                
-                <TouchableOpacity 
-                  style={styles.addPetCard}
-                  onPress={() => navigation.navigate('AddPet')}
-                >
-                  <View style={styles.addPetIcon}>
-                    <Ionicons name="add" size={32} color="#FF5A5F" />
-                  </View>
-                  <Text style={styles.addPetText}>Add Pet</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          )}
         </View>
 
         {/* Quick Actions */}
         <View style={styles.quickActions}>
           <TouchableOpacity 
-            style={styles.actionCard}
+            style={styles.actionButton}
             onPress={() => navigation.navigate('Search')}
           >
             <Ionicons name="search" size={24} color="#FF5A5F" />
-            <Text style={styles.actionCardText}>Find Care</Text>
+            <Text style={styles.actionText}>Find Services</Text>
           </TouchableOpacity>
-
           <TouchableOpacity 
-          style={styles.actionCard}
-          onPress={() => navigation.navigate('BookingManagement')}
-        >
-          <Ionicons name="calendar" size={24} color="#3B82F6" />
-          <Text style={styles.actionCardText}>My Bookings</Text>
-        </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={styles.actionCard}
-            onPress={() => navigation.navigate('Messages')}
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('AddPet')}
           >
-            <Ionicons name="chatbubbles" size={24} color="#10B981" />
-            <Text style={styles.actionCardText}>Messages</Text>
+            <Ionicons name="add-circle" size={24} color="#FF5A5F" />
+            <Text style={styles.actionText}>Add Pet</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('BookingManagement')}
+          >
+            <Ionicons name="calendar" size={24} color="#FF5A5F" />
+            <Text style={styles.actionText}>My Bookings</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Upcoming Bookings */}
+        {upcomingBookings.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Upcoming Services</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('BookingManagement')}>
+                <Text style={styles.seeAllText}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={upcomingBookings}
+              renderItem={renderUpcomingBooking}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        )}
+
+        {/* Recent Bookings */}
+        {recentBookings.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recent Activity</Text>
+              <TouchableOpacity onPress={() => navigation.navigate('BookingHistory')}>
+                <Text style={styles.seeAllText}>See all</Text>
+              </TouchableOpacity>
+            </View>
+            <FlatList
+              data={recentBookings}
+              renderItem={renderRecentBooking}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
+        )}
+
+        {/* Empty State */}
+        {upcomingBookings.length === 0 && recentBookings.length === 0 && (
+          <View style={styles.emptyState}>
+            <Ionicons name="calendar-outline" size={64} color="#CCC" />
+            <Text style={styles.emptyTitle}>No bookings yet</Text>
+            <Text style={styles.emptyText}>Start by finding amazing pet care services near you</Text>
+            <TouchableOpacity 
+              style={styles.exploreButton}
+              onPress={() => navigation.navigate('Search')}
+            >
+              <Text style={styles.exploreButtonText}>Explore Services</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Bottom Padding */}
+        <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -294,130 +284,162 @@ const PetOwnerDashboard = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9F9F9',
+    backgroundColor: '#F8F9FA',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 24,
+    paddingVertical: 20,
     backgroundColor: 'white',
   },
   greeting: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 4,
   },
   subGreeting: {
     fontSize: 16,
     color: '#666',
+    marginTop: 4,
   },
-  profileButton: {
-    // Profile button styles
+  notificationButton: {
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 8,
+    height: 8,
+    backgroundColor: '#FF5A5F',
+    borderRadius: 4,
   },
   statsContainer: {
-    flexDirection: 'row',
     paddingHorizontal: 20,
-    paddingVertical: 20,
-    backgroundColor: 'white',
+    paddingTop: 20,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
     marginBottom: 12,
   },
   statCard: {
     flex: 1,
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 12,
     alignItems: 'center',
-    paddingVertical: 16,
-  },
-  statIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F9F9F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   statNumber: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#333',
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#666',
     textAlign: 'center',
   },
-  section: {
+  quickActions: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
     backgroundColor: 'white',
-    marginBottom: 12,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  actionText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+    marginTop: 8,
+  },
+  section: {
+    paddingTop: 24,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
   },
   seeAllText: {
     fontSize: 16,
     color: '#FF5A5F',
-    fontWeight: '600',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: '#666',
-    marginTop: 12,
-    marginBottom: 16,
-  },
-  emptyStateButton: {
-    backgroundColor: '#FF5A5F',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 20,
-  },
-  emptyStateButtonText: {
-    color: 'white',
-    fontWeight: '600',
+    fontWeight: '500',
   },
   bookingCard: {
+    backgroundColor: 'white',
     marginHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 12,
     padding: 16,
-    backgroundColor: '#F9F9F9',
     borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   bookingHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
   },
   bookingInfo: {
     flex: 1,
   },
-  bookingService: {
+  serviceName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#333',
     marginBottom: 4,
   },
-  bookingCaregiver: {
+  bookingDate: {
     fontSize: 14,
     color: '#666',
+    marginBottom: 2,
+  },
+  caregiverName: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  location: {
+    fontSize: 14,
+    color: '#666',
+  },
+  bookingRight: {
+    alignItems: 'flex-end',
+  },
+  amount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -426,122 +448,103 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '600',
+    color: 'white',
+    fontWeight: '500',
+    textTransform: 'capitalize',
   },
-  bookingDetails: {
-    marginBottom: 12,
+  petsInfo: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
   },
-  bookingDetailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  bookingDetailText: {
+  petsLabel: {
     fontSize: 14,
     color: '#666',
-    marginLeft: 8,
   },
-  bookingActions: {
+  recentBookingCard: {
+    backgroundColor: 'white',
+    marginHorizontal: 20,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  actionButton: {
-    flexDirection: 'row',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  recentBookingInfo: {
     flex: 1,
-    justifyContent: 'center',
-    paddingVertical: 8,
   },
-  actionButtonText: {
-    fontSize: 14,
-    color: '#FF5A5F',
+  recentServiceName: {
+    fontSize: 16,
     fontWeight: '500',
-    marginLeft: 6,
-  },
-  petsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  petCard: {
-    alignItems: 'center',
-    marginRight: 16,
-    width: 100,
-  },
-  petAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#FF5A5F',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  petAvatarText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  petName: {
-    fontSize: 14,
-    fontWeight: '600',
     color: '#333',
     marginBottom: 2,
   },
-  petBreed: {
-    fontSize: 12,
+  recentDate: {
+    fontSize: 14,
     color: '#666',
     marginBottom: 2,
-    textAlign: 'center',
   },
-  petAge: {
-    fontSize: 11,
-    color: '#999',
-  },
-  addPetCard: {
-    alignItems: 'center',
-    width: 100,
-  },
-  addPetIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#FF5A5F20',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-    borderWidth: 2,
-    borderColor: '#FF5A5F',
-    borderStyle: 'dashed',
-  },
-  addPetText: {
+  recentCaregiver: {
     fontSize: 14,
-    color: '#FF5A5F',
-    fontWeight: '600',
+    color: '#666',
   },
-  quickActions: {
+  recentBookingRight: {
+    alignItems: 'flex-end',
+  },
+  recentAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  ratingContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-    gap: 12,
-  },
-  actionCard: {
-    flex: 1,
     alignItems: 'center',
-    backgroundColor: 'white',
-    paddingVertical: 20,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
   },
-  actionCardText: {
+  ratingText: {
     fontSize: 14,
     color: '#333',
-    fontWeight: '500',
-    marginTop: 8,
+    marginLeft: 4,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  exploreButton: {
+    backgroundColor: '#FF5A5F',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  exploreButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  bottomPadding: {
+    height: 20,
   },
 });
 

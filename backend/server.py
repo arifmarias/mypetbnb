@@ -28,7 +28,7 @@ import httpx
 from enum import Enum
 import logging
 from fastapi.responses import HTMLResponse
-
+from booking_management import booking_router
 # Import new Supabase modules
 from database import get_db_client, startup_event, shutdown_event
 from models import (
@@ -1653,7 +1653,7 @@ async def get_booking_messages(booking_id: str, current_user: dict = Depends(get
 
 # Include router
 app.include_router(api_router)
-
+app.include_router(booking_router)
 # Root endpoint
 @app.get("/")
 async def root():

@@ -73,6 +73,20 @@ export const bookingsAPI = {
   // Booking filters and search
   getBookingsByStatus: (status) => api.get(`/api/bookings?status=${status}`),
   getBookingsByDateRange: (startDate, endDate) => api.get(`/api/bookings?start_date=${startDate}&end_date=${endDate}`),
+  getFilteredBookings: (filter, limit = 50, offset = 0) => 
+    api.get(`/api/bookings/filter/${filter}?limit=${limit}&offset=${offset}`),
+  
+  confirmBooking: (bookingId) => 
+    api.post(`/api/bookings/${bookingId}/actions/confirm`),
+  
+  startService: (bookingId) => 
+    api.post(`/api/bookings/${bookingId}/actions/start-service`),
+  
+  completeService: (bookingId, completionData) => 
+    api.post(`/api/bookings/${bookingId}/actions/complete`, completionData),
+  
+  getBookingTimeline: (bookingId) => 
+    api.get(`/api/bookings/${bookingId}/timeline`),
 };
 
 export const messagesAPI = {
