@@ -59,6 +59,12 @@ const ProfileScreen = ({ navigation }) => {
       showForRole: 'caregiver',
     },
     {
+      id: 'booking_management',
+      title: 'My Bookings',
+      icon: 'calendar-outline',
+      onPress: () => navigation.navigate('BookingManagement'),
+    },
+    {
       id: 'booking_history',
       title: 'Booking History',
       icon: 'time-outline',

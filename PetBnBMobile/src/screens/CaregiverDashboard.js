@@ -186,7 +186,7 @@ const CaregiverDashboard = ({ navigation }) => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Active Bookings</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('BookingManagement')}>
               <Text style={styles.seeAllText}>View All</Text>
             </TouchableOpacity>
           </View>
@@ -199,7 +199,11 @@ const CaregiverDashboard = ({ navigation }) => {
             </View>
           ) : (
             activeBookings.map((booking) => (
-              <TouchableOpacity key={booking.id} style={styles.bookingCard}>
+              <TouchableOpacity 
+                    key={booking.id} 
+                    style={styles.bookingCard}
+                    onPress={() => navigation.navigate('BookingDetails', { bookingId: booking.id })}
+                  >
                 <View style={styles.bookingHeader}>
                   <View style={styles.bookingInfo}>
                     <Text style={styles.bookingService}>{booking.service}</Text>
@@ -322,10 +326,13 @@ const CaregiverDashboard = ({ navigation }) => {
 
         {/* Quick Actions */}
         <View style={styles.quickActions}>
-          <TouchableOpacity style={styles.actionCard}>
-            <Ionicons name="calendar" size={24} color="#3B82F6" />
-            <Text style={styles.actionCardText}>Schedule</Text>
-          </TouchableOpacity>
+          <TouchableOpacity 
+              style={styles.actionCard}
+              onPress={() => navigation.navigate('BookingManagement')}
+            >
+              <Ionicons name="calendar" size={24} color="#3B82F6" />
+              <Text style={styles.actionCardText}>My Bookings</Text>
+            </TouchableOpacity>
 
           <TouchableOpacity style={styles.actionCard}>
             <Ionicons name="bar-chart" size={24} color="#10B981" />

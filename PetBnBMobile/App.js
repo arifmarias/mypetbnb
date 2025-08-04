@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EmailVerificationScreen from './src/screens/EmailVerificationScreen';
+
 // Context
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ToastProvider } from './src/context/ToastContext';
@@ -37,6 +38,10 @@ import MyServicesScreen from './src/screens/MyServicesScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import HelpSupportScreen from './src/screens/HelpSupportScreen';
 import AboutScreen from './src/screens/AboutScreen';
+
+// NEW: Booking Management Screens
+import BookingDetailsScreen from './src/screens/BookingDetailsScreen';
+import BookingManagementScreen from './src/screens/BookingManagementScreen';
 
 // Suppress specific warnings
 LogBox.ignoreLogs([
@@ -151,7 +156,13 @@ function AppNavigator() {
           ) : null}
           
           <Stack.Screen name="MainTabs" component={TabNavigator} />
+          
+          {/* Booking Related Screens */}
           <Stack.Screen name="Booking" component={BookingScreen} />
+          <Stack.Screen name="BookingDetails" component={BookingDetailsScreen} />
+          <Stack.Screen name="BookingManagement" component={BookingManagementScreen} />
+          
+          {/* Other Screens */}
           <Stack.Screen name="PetDetails" component={PetDetailsScreen} />
           <Stack.Screen name="ServiceDetails" component={ServiceDetailsScreen} />
           <Stack.Screen name="AddPet" component={AddPetScreen} />

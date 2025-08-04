@@ -77,6 +77,11 @@ const MessagesScreen = ({ navigation }) => {
         bookingId: item.bookingId,
         serviceType: item.serviceType
       })}
+      onLongPress={() => {
+        if (item.bookingId) {
+          navigation.navigate('BookingDetails', { bookingId: item.bookingId });
+        }
+      }}
     >
       <View style={styles.avatarContainer}>
         <Image source={{ uri: item.contactImage }} style={styles.avatar} />

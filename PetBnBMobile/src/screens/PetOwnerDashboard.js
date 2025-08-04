@@ -149,7 +149,11 @@ const PetOwnerDashboard = ({ navigation }) => {
             </View>
           ) : (
             upcomingBookings.map((booking) => (
-              <TouchableOpacity key={booking.id} style={styles.bookingCard}>
+              <TouchableOpacity 
+                    key={booking.id} 
+                    style={styles.bookingCard}
+                    onPress={() => navigation.navigate('BookingDetails', { bookingId: booking.id })}
+                  >
                 <View style={styles.bookingHeader}>
                   <View style={styles.bookingInfo}>
                     <Text style={styles.bookingService}>{booking.service}</Text>
@@ -266,10 +270,13 @@ const PetOwnerDashboard = ({ navigation }) => {
             <Text style={styles.actionCardText}>Find Care</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionCard}>
-            <Ionicons name="calendar" size={24} color="#3B82F6" />
-            <Text style={styles.actionCardText}>My Bookings</Text>
-          </TouchableOpacity>
+          <TouchableOpacity 
+          style={styles.actionCard}
+          onPress={() => navigation.navigate('BookingManagement')}
+        >
+          <Ionicons name="calendar" size={24} color="#3B82F6" />
+          <Text style={styles.actionCardText}>My Bookings</Text>
+        </TouchableOpacity>
 
           <TouchableOpacity 
             style={styles.actionCard}
