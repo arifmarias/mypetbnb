@@ -29,15 +29,21 @@ const ProfileScreen = ({ navigation }) => {
 
   useEffect(() => {
     if (user) {
+      // Fix: Check user_type from user object (this should match database field)
+      const userRole = user.user_type || user.role; // Check both possible field names
+      
+      console.log('User object:', user); // Debug log
+      console.log('User role/type:', userRole); // Debug log
+      
       // Mock profile stats - replace with API calls
-      if (user.role === 'pet_owner') {
+      if (userRole === 'pet_owner') {
         setProfileStats({
           completedBookings: 12,
           totalReviews: 8,
           averageRating: 4.8,
           memberSince: '2024',
         });
-      } else {
+      } else if (userRole === 'caregiver') {
         setProfileStats({
           completedBookings: 48,
           totalReviews: 32,
@@ -202,15 +208,16 @@ const ProfileScreen = ({ navigation }) => {
   };
 
   const handleRoleSwitch = () => {
+    const currentRole = user?.user_type || user?.role;
     Alert.alert(
       'Switch Role',
-      user?.role === 'pet_owner' 
+      currentRole === 'pet_owner' 
         ? 'Become a Pet Caregiver and start earning by providing pet care services.'
         : 'Switch back to Pet Owner mode to book services for your pets.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: user?.role === 'pet_owner' ? 'Become Caregiver' : 'Switch to Pet Owner',
+          text: currentRole === 'pet_owner' ? 'Become Caregiver' : 'Switch to Pet Owner',
           onPress: () => {
             // This would make an API call to switch roles
             toast.success('Role switch request submitted for review');
@@ -220,11 +227,13 @@ const ProfileScreen = ({ navigation }) => {
     );
   };
 
-  const menuItems = user?.role === 'pet_owner' ? petOwnerMenuItems : caregiverMenuItems;
+  // Fix: Get user role properly
+  const currentUserRole = user?.user_type || user?.role;
+  const menuItems = currentUserRole === 'pet_owner' ? petOwnerMenuItems : caregiverMenuItems;
   const allMenuItems = [...menuItems, ...commonMenuItems];
 
   const renderStatsSection = () => {
-    if (user?.role === 'pet_owner') {
+    if (currentUserRole === 'pet_owner') {
       return (
         <View style={styles.statsContainer}>
           <View style={styles.statItem}>
@@ -271,21 +280,24 @@ const ProfileScreen = ({ navigation }) => {
     }
   };
 
-  const renderMenuItem = (item) => (
-    <TouchableOpacity
-      key={item.id}
-      style={styles.menuItem}
-      onPress={item.onPress}
-    >
-      <View style={styles.menuItemLeft}>
-        <View style={styles.menuIconContainer}>
-          <Ionicons name={item.icon} size={22} color="#666" />
+  // Fix: Render menu items without VirtualizedList
+  const renderMenuItems = () => {
+    return allMenuItems.map((item) => (
+      <TouchableOpacity
+        key={item.id}
+        style={styles.menuItem}
+        onPress={item.onPress}
+      >
+        <View style={styles.menuItemLeft}>
+          <View style={styles.menuIconContainer}>
+            <Ionicons name={item.icon} size={22} color="#666" />
+          </View>
+          <Text style={styles.menuItemText}>{item.title}</Text>
         </View>
-        <Text style={styles.menuItemText}>{item.title}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={20} color="#CCC" />
-    </TouchableOpacity>
-  );
+        <Ionicons name="chevron-forward" size={20} color="#CCC" />
+      </TouchableOpacity>
+    ));
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -322,14 +334,14 @@ const ProfileScreen = ({ navigation }) => {
               <Text style={styles.userEmail}>{user?.email || 'user@example.com'}</Text>
               <View style={styles.roleContainer}>
                 <Ionicons 
-                  name={user?.role === 'pet_owner' ? 'heart' : 'shield-checkmark'} 
+                  name={currentUserRole === 'pet_owner' ? 'heart' : 'shield-checkmark'} 
                   size={16} 
                   color="#FF5A5F" 
                 />
                 <Text style={styles.roleText}>
-                  {user?.role === 'pet_owner' ? 'Pet Owner' : 'Pet Caregiver'}
+                  {currentUserRole === 'pet_owner' ? 'Pet Owner' : 'Pet Caregiver'}
                 </Text>
-                {user?.role === 'caregiver' && (
+                {currentUserRole === 'caregiver' && (
                   <View style={styles.verifiedBadge}>
                     <Ionicons name="checkmark-circle" size={16} color="#10B981" />
                     <Text style={styles.verifiedText}>Verified</Text>
@@ -350,16 +362,16 @@ const ProfileScreen = ({ navigation }) => {
         <View style={styles.roleSwitchCard}>
           <View style={styles.roleSwitchHeader}>
             <Ionicons 
-              name={user?.role === 'pet_owner' ? 'business-outline' : 'home-outline'} 
+              name={currentUserRole === 'pet_owner' ? 'business-outline' : 'home-outline'} 
               size={24} 
               color="#FF5A5F" 
             />
             <View style={styles.roleSwitchInfo}>
               <Text style={styles.roleSwitchTitle}>
-                {user?.role === 'pet_owner' ? 'Become a Pet Caregiver' : 'Switch to Pet Owner'}
+                {currentUserRole === 'pet_owner' ? 'Become a Pet Caregiver' : 'Switch to Pet Owner'}
               </Text>
               <Text style={styles.roleSwitchSubtitle}>
-                {user?.role === 'pet_owner' 
+                {currentUserRole === 'pet_owner' 
                   ? 'Start earning by providing pet care services'
                   : 'Book services for your pets'
                 }
@@ -368,14 +380,14 @@ const ProfileScreen = ({ navigation }) => {
           </View>
           <TouchableOpacity style={styles.roleSwitchButton} onPress={handleRoleSwitch}>
             <Text style={styles.roleSwitchButtonText}>
-              {user?.role === 'pet_owner' ? 'Get Started' : 'Switch Mode'}
+              {currentUserRole === 'pet_owner' ? 'Get Started' : 'Switch Mode'}
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Menu Items */}
+        {/* Menu Items - Fixed: No more VirtualizedList */}
         <View style={styles.menuSection}>
-          {allMenuItems.map(renderMenuItem)}
+          {renderMenuItems()}
         </View>
 
         {/* Notification Settings */}

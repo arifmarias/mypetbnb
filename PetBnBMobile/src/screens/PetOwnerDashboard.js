@@ -6,8 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Image,
-  FlatList,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -109,52 +107,59 @@ const PetOwnerDashboard = ({ navigation }) => {
     }
   };
 
-  const renderUpcomingBooking = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.bookingCard}
-      onPress={() => navigation.navigate('BookingDetails', { bookingId: item.id })}
-    >
-      <View style={styles.bookingHeader}>
-        <View style={styles.bookingInfo}>
-          <Text style={styles.serviceName}>{item.service}</Text>
-          <Text style={styles.bookingDate}>{item.date} at {item.time}</Text>
-          <Text style={styles.caregiverName}>{item.caregiver.name}</Text>
-          <Text style={styles.location}>{item.location}</Text>
-        </View>
-        <View style={styles.bookingRight}>
-          <Text style={styles.amount}>RM{item.amount}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-            <Text style={styles.statusText}>{item.status}</Text>
+  // Fix: Render items without VirtualizedList
+  const renderUpcomingBookings = () => {
+    return upcomingBookings.map((item) => (
+      <TouchableOpacity 
+        key={item.id}
+        style={styles.bookingCard}
+        onPress={() => navigation.navigate('BookingDetails', { bookingId: item.id })}
+      >
+        <View style={styles.bookingHeader}>
+          <View style={styles.bookingInfo}>
+            <Text style={styles.serviceName}>{item.service}</Text>
+            <Text style={styles.bookingDate}>{item.date} at {item.time}</Text>
+            <Text style={styles.caregiverName}>{item.caregiver.name}</Text>
+            <Text style={styles.location}>{item.location}</Text>
+          </View>
+          <View style={styles.bookingRight}>
+            <Text style={styles.amount}>RM{item.amount}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+              <Text style={styles.statusText}>{item.status}</Text>
+            </View>
           </View>
         </View>
-      </View>
-      <View style={styles.petsInfo}>
-        <Text style={styles.petsLabel}>Pets: {item.pets.join(', ')}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+        <View style={styles.petsInfo}>
+          <Text style={styles.petsLabel}>Pets: {item.pets.join(', ')}</Text>
+        </View>
+      </TouchableOpacity>
+    ));
+  };
 
-  const renderRecentBooking = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.recentBookingCard}
-      onPress={() => navigation.navigate('BookingDetails', { bookingId: item.id })}
-    >
-      <View style={styles.recentBookingInfo}>
-        <Text style={styles.recentServiceName}>{item.service}</Text>
-        <Text style={styles.recentDate}>{item.date}</Text>
-        <Text style={styles.recentCaregiver}>by {item.caregiver}</Text>
-      </View>
-      <View style={styles.recentBookingRight}>
-        <Text style={styles.recentAmount}>RM{item.amount}</Text>
-        {item.rating && (
-          <View style={styles.ratingContainer}>
-            <Ionicons name="star" size={12} color="#FFD700" />
-            <Text style={styles.ratingText}>{item.rating}</Text>
-          </View>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+  const renderRecentBookings = () => {
+    return recentBookings.map((item) => (
+      <TouchableOpacity 
+        key={item.id}
+        style={styles.recentBookingCard}
+        onPress={() => navigation.navigate('BookingDetails', { bookingId: item.id })}
+      >
+        <View style={styles.recentBookingInfo}>
+          <Text style={styles.recentServiceName}>{item.service}</Text>
+          <Text style={styles.recentDate}>{item.date}</Text>
+          <Text style={styles.recentCaregiver}>by {item.caregiver}</Text>
+        </View>
+        <View style={styles.recentBookingRight}>
+          <Text style={styles.recentAmount}>RM{item.amount}</Text>
+          {item.rating && (
+            <View style={styles.ratingContainer}>
+              <Ionicons name="star" size={12} color="#FFD700" />
+              <Text style={styles.ratingText}>{item.rating}</Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    ));
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -232,12 +237,8 @@ const PetOwnerDashboard = ({ navigation }) => {
                 <Text style={styles.seeAllText}>See all</Text>
               </TouchableOpacity>
             </View>
-            <FlatList
-              data={upcomingBookings}
-              renderItem={renderUpcomingBooking}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-            />
+            {/* Fixed: No more FlatList, just render directly */}
+            {renderUpcomingBookings()}
           </View>
         )}
 
@@ -250,12 +251,8 @@ const PetOwnerDashboard = ({ navigation }) => {
                 <Text style={styles.seeAllText}>See all</Text>
               </TouchableOpacity>
             </View>
-            <FlatList
-              data={recentBookings}
-              renderItem={renderRecentBooking}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-            />
+            {/* Fixed: No more FlatList, just render directly */}
+            {renderRecentBookings()}
           </View>
         )}
 

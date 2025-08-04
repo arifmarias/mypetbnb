@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  FlatList,
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -121,88 +120,95 @@ const CaregiverDashboard = ({ navigation }) => {
     );
   };
 
-  const renderTodayBooking = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.todayBookingCard}
-      onPress={() => navigation.navigate('BookingDetails', { bookingId: item.id })}
-    >
-      <View style={styles.bookingHeader}>
-        <View style={styles.bookingInfo}>
-          <Text style={styles.serviceName}>{item.service}</Text>
-          <Text style={styles.bookingTime}>{item.time}</Text>
-          <Text style={styles.ownerName}>{item.owner.name}</Text>
-          <Text style={styles.petsInfo}>
-            {item.pets.map(pet => `${pet.name} (${pet.breed})`).join(', ')}
+  // Fix: Render items without VirtualizedList
+  const renderTodayBookings = () => {
+    return todayBookings.map((item) => (
+      <TouchableOpacity 
+        key={item.id}
+        style={styles.todayBookingCard}
+        onPress={() => navigation.navigate('BookingDetails', { bookingId: item.id })}
+      >
+        <View style={styles.bookingHeader}>
+          <View style={styles.bookingInfo}>
+            <Text style={styles.serviceName}>{item.service}</Text>
+            <Text style={styles.bookingTime}>{item.time}</Text>
+            <Text style={styles.ownerName}>{item.owner.name}</Text>
+            <Text style={styles.petsInfo}>
+              {item.pets.map(pet => `${pet.name} (${pet.breed})`).join(', ')}
+            </Text>
+          </View>
+          <View style={styles.bookingRight}>
+            <Text style={styles.amount}>RM{item.amount}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+              <Text style={styles.statusText}>{item.status}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.bookingActions}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={() => navigation.navigate('Chat', { bookingId: item.id })}
+          >
+            <Ionicons name="chatbubble-outline" size={16} color="#FF5A5F" />
+            <Text style={styles.actionButtonText}>Message</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.actionButton, styles.primaryActionButton]}
+            onPress={() => handleBookingAction(item.id, 'start')}
+          >
+            <Ionicons name="play-outline" size={16} color="white" />
+            <Text style={[styles.actionButtonText, { color: 'white' }]}>Start</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    ));
+  };
+
+  const renderUpcomingBookings = () => {
+    return upcomingBookings.map((item) => (
+      <TouchableOpacity 
+        key={item.id}
+        style={styles.upcomingBookingCard}
+        onPress={() => navigation.navigate('BookingDetails', { bookingId: item.id })}
+      >
+        <View style={styles.bookingHeader}>
+          <View style={styles.bookingInfo}>
+            <Text style={styles.serviceName}>{item.service}</Text>
+            <Text style={styles.bookingDate}>{item.date} at {item.time}</Text>
+            <Text style={styles.ownerName}>{item.owner.name}</Text>
+            <Text style={styles.location}>{item.location}</Text>
+          </View>
+          <View style={styles.bookingRight}>
+            <Text style={styles.amount}>RM{item.amount}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
+              <Text style={styles.statusText}>{item.status}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.petsSection}>
+          <Text style={styles.petsLabel}>
+            Pets: {item.pets.map(pet => pet.name).join(', ')}
           </Text>
         </View>
-        <View style={styles.bookingRight}>
-          <Text style={styles.amount}>RM{item.amount}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-            <Text style={styles.statusText}>{item.status}</Text>
+        {item.status === 'pending' && (
+          <View style={styles.pendingActions}>
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.declineButton]}
+              onPress={() => handleBookingAction(item.id, 'decline')}
+            >
+              <Text style={[styles.actionButtonText, { color: '#FF5A5F' }]}>Decline</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.acceptButton]}
+              onPress={() => handleBookingAction(item.id, 'accept')}
+            >
+              <Text style={[styles.actionButtonText, { color: 'white' }]}>Accept</Text>
+            </TouchableOpacity>
           </View>
-        </View>
-      </View>
-      <View style={styles.bookingActions}>
-        <TouchableOpacity 
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('Chat', { bookingId: item.id })}
-        >
-          <Ionicons name="chatbubble-outline" size={16} color="#FF5A5F" />
-          <Text style={styles.actionButtonText}>Message</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.actionButton, styles.primaryActionButton]}
-          onPress={() => handleBookingAction(item.id, 'start')}
-        >
-          <Ionicons name="play-outline" size={16} color="white" />
-          <Text style={[styles.actionButtonText, { color: 'white' }]}>Start</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderUpcomingBooking = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.upcomingBookingCard}
-      onPress={() => navigation.navigate('BookingDetails', { bookingId: item.id })}
-    >
-      <View style={styles.bookingHeader}>
-        <View style={styles.bookingInfo}>
-          <Text style={styles.serviceName}>{item.service}</Text>
-          <Text style={styles.bookingDate}>{item.date} at {item.time}</Text>
-          <Text style={styles.ownerName}>{item.owner.name}</Text>
-          <Text style={styles.location}>{item.location}</Text>
-        </View>
-        <View style={styles.bookingRight}>
-          <Text style={styles.amount}>RM{item.amount}</Text>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-            <Text style={styles.statusText}>{item.status}</Text>
-          </View>
-        </View>
-      </View>
-      <View style={styles.petsSection}>
-        <Text style={styles.petsLabel}>
-          Pets: {item.pets.map(pet => pet.name).join(', ')}
-        </Text>
-      </View>
-      {item.status === 'pending' && (
-        <View style={styles.pendingActions}>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.declineButton]}
-            onPress={() => handleBookingAction(item.id, 'decline')}
-          >
-            <Text style={[styles.actionButtonText, { color: '#FF5A5F' }]}>Decline</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.acceptButton]}
-            onPress={() => handleBookingAction(item.id, 'accept')}
-          >
-            <Text style={[styles.actionButtonText, { color: 'white' }]}>Accept</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </TouchableOpacity>
-  );
+        )}
+      </TouchableOpacity>
+    ));
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -292,12 +298,8 @@ const CaregiverDashboard = ({ navigation }) => {
                 })}
               </Text>
             </View>
-            <FlatList
-              data={todayBookings}
-              renderItem={renderTodayBooking}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-            />
+            {/* Fixed: No more FlatList, just render directly */}
+            {renderTodayBookings()}
           </View>
         )}
 
@@ -310,12 +312,8 @@ const CaregiverDashboard = ({ navigation }) => {
                 <Text style={styles.seeAllText}>See all</Text>
               </TouchableOpacity>
             </View>
-            <FlatList
-              data={upcomingBookings}
-              renderItem={renderUpcomingBooking}
-              keyExtractor={(item) => item.id}
-              showsVerticalScrollIndicator={false}
-            />
+            {/* Fixed: No more FlatList, just render directly */}
+            {renderUpcomingBookings()}
           </View>
         )}
 
@@ -398,6 +396,12 @@ const styles = StyleSheet.create({
   earningsSection: {
     paddingHorizontal: 20,
     paddingTop: 20,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 16,
   },
   earningsCard: {
     backgroundColor: 'white',
@@ -494,11 +498,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
   },
   dateText: {
     fontSize: 16,
