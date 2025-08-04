@@ -58,6 +58,13 @@ const Tab = createBottomTabNavigator();
 function TabNavigator() {
   const { user } = useAuth();
   
+  // Fix: Get user role properly - check both possible field names
+  const userRole = user?.user_type || user?.role;
+  
+  // Debug logging
+  console.log('TabNavigator - User object:', user);
+  console.log('TabNavigator - User role:', userRole);
+  
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -92,7 +99,7 @@ function TabNavigator() {
       <Tab.Screen name="Search" component={SearchScreen} />
       <Tab.Screen 
         name="Dashboard" 
-        component={user?.role === 'pet_owner' ? PetOwnerDashboard : CaregiverDashboard} 
+        component={userRole === 'pet_owner' ? PetOwnerDashboard : CaregiverDashboard} 
       />
       <Tab.Screen name="Messages" component={MessagesScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
@@ -152,27 +159,124 @@ function AppNavigator() {
         <>
           {/* Check if email is verified */}
           {!user.email_verified ? (
-            <Stack.Screen name="EmailVerification" component={EmailVerificationScreen} />
-          ) : null}
-          
-          <Stack.Screen name="MainTabs" component={TabNavigator} />
-          
-          {/* Booking Related Screens */}
-          <Stack.Screen name="Booking" component={BookingScreen} />
-          <Stack.Screen name="BookingDetails" component={BookingDetailsScreen} />
-          <Stack.Screen name="BookingManagement" component={BookingManagementScreen} />
-          
-          {/* Other Screens */}
-          <Stack.Screen name="PetDetails" component={PetDetailsScreen} />
-          <Stack.Screen name="ServiceDetails" component={ServiceDetailsScreen} />
-          <Stack.Screen name="AddPet" component={AddPetScreen} />
-          <Stack.Screen name="ChatScreen" component={ChatScreen} />
-          <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-          <Stack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
-          <Stack.Screen name="MyServices" component={MyServicesScreen} />
-          <Stack.Screen name="Settings" component={SettingsScreen} />
-          <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
-          <Stack.Screen name="About" component={AboutScreen} />
+            <Stack.Screen 
+              name="EmailVerification" 
+              component={EmailVerificationScreen}
+              options={{ gestureEnabled: false }}
+            />
+          ) : (
+            <>
+              {/* Main App Screens */}
+              <Stack.Screen name="MainTabs" component={TabNavigator} />
+              
+              {/* Modal/Detail Screens */}
+              <Stack.Screen 
+                name="BookingDetails" 
+                component={BookingDetailsScreen}
+                options={{
+                  presentation: 'modal',
+                  headerShown: true,
+                  title: 'Booking Details'
+                }}
+              />
+              <Stack.Screen 
+                name="BookingManagement" 
+                component={BookingManagementScreen}
+                options={{
+                  headerShown: true,
+                  title: 'My Bookings'
+                }}
+              />
+              <Stack.Screen 
+                name="Booking" 
+                component={BookingScreen}
+                options={{
+                  headerShown: true,
+                  title: 'Create Booking'
+                }}
+              />
+              <Stack.Screen 
+                name="PetDetails" 
+                component={PetDetailsScreen}
+                options={{
+                  headerShown: true,
+                  title: 'Pet Details'
+                }}
+              />
+              <Stack.Screen 
+                name="ServiceDetails" 
+                component={ServiceDetailsScreen}
+                options={{
+                  headerShown: true,
+                  title: 'Service Details'
+                }}
+              />
+              <Stack.Screen 
+                name="AddPet" 
+                component={AddPetScreen}
+                options={{
+                  headerShown: true,
+                  title: 'Add Pet'
+                }}
+              />
+              <Stack.Screen 
+                name="Chat" 
+                component={ChatScreen}
+                options={{
+                  headerShown: true,
+                  title: 'Chat'
+                }}
+              />
+              <Stack.Screen 
+                name="EditProfile" 
+                component={EditProfileScreen}
+                options={{
+                  headerShown: true,
+                  title: 'Edit Profile'
+                }}
+              />
+              <Stack.Screen 
+                name="PaymentMethods" 
+                component={PaymentMethodsScreen}
+                options={{
+                  headerShown: true,
+                  title: 'Payment Methods'
+                }}
+              />
+              <Stack.Screen 
+                name="MyServices" 
+                component={MyServicesScreen}
+                options={{
+                  headerShown: true,
+                  title: 'My Services'
+                }}
+              />
+              <Stack.Screen 
+                name="Settings" 
+                component={SettingsScreen}
+                options={{
+                  headerShown: true,
+                  title: 'Settings'
+                }}
+              />
+              <Stack.Screen 
+                name="HelpSupport" 
+                component={HelpSupportScreen}
+                options={{
+                  headerShown: true,
+                  title: 'Help & Support'
+                }}
+              />
+              <Stack.Screen 
+                name="About" 
+                component={AboutScreen}
+                options={{
+                  headerShown: true,
+                  title: 'About PetBnB'
+                }}
+              />
+            </>
+          )}
         </>
       ) : (
         <Stack.Screen name="Auth" component={AuthNavigator} />
@@ -183,48 +287,43 @@ function AppNavigator() {
 
 export default function App() {
   const [appIsReady, setAppIsReady] = useState(false);
-  
+
   useEffect(() => {
     async function prepare() {
       try {
+        // Keep the splash screen visible while we fetch resources
+        await SplashScreen.preventAutoHideAsync();
+        
         // Pre-load fonts, make any API calls you need to do here
-        // Artificially delay for demo purposes
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // For now, we'll just simulate some loading time
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
       } catch (e) {
         console.warn(e);
       } finally {
+        // Tell the application to render
         setAppIsReady(true);
+        await SplashScreen.hideAsync();
       }
     }
-    
+
     prepare();
   }, []);
-  
-  useEffect(() => {
-    if (appIsReady) {
-      SplashScreen.hideAsync();
-    }
-  }, [appIsReady]);
-  
+
   if (!appIsReady) {
     return null;
   }
-  
+
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <ToastProvider>
-          <NavigationContainer 
-            onReady={() => {
-              // Setup notification listeners when navigation is ready
-              // This ensures navigation is available for notification handling
-            }}
-          >
-            <StatusBar style="auto" />
+      <NavigationContainer>
+        <AuthProvider>
+          <ToastProvider>
             <AppNavigator />
-          </NavigationContainer>
-        </ToastProvider>
-      </AuthProvider>
+            <StatusBar style="auto" />
+          </ToastProvider>
+        </AuthProvider>
+      </NavigationContainer>
     </SafeAreaProvider>
   );
 }
