@@ -1,8 +1,8 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Use your computer's IP address (replace with your actual IP)
-// Run 'ipconfig getifaddr en0' in terminal to find your IP
-const API_BASE_URL = 'http://192.168.68.105:8000';  // Replace YOUR_IP_ADDRESS with actual IP
+const API_BASE_URL = 'http://192.168.68.105:8000';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -12,23 +12,40 @@ export const api = axios.create({
   },
 });
 
-// Request interceptor
+// Request interceptor to add auth token
 api.interceptors.request.use(
-  (config) => {
-    console.log(`Making ${config.method?.toUpperCase()} request to ${config.url}`);
-    return config;
+  async (config) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      console.log(`Making ${config.method?.toUpperCase()} request to ${config.url}`);
+      return config;
+    } catch (error) {
+      console.error('Error getting token:', error);
+      return config;
+    }
   },
   (error) => {
     return Promise.reject(error);
   }
 );
 
-// Response interceptor
+// Response interceptor to handle auth errors
 api.interceptors.response.use(
   (response) => {
     return response;
   },
-  (error) => {
+  async (error) => {
+    if (error.response?.status === 401) {
+      // Token expired or invalid
+      await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('user_id');
+      // You might want to redirect to login screen here
+      console.log('Token expired, user needs to login again');
+    }
+    
     console.error('API Error:', error.response?.data || error.message);
     return Promise.reject(error);
   }
@@ -55,6 +72,8 @@ export const petsAPI = {
 export const servicesAPI = {
   getServices: () => api.get('/api/caregiver/services'),
   createService: (serviceData) => api.post('/api/caregiver/services', serviceData),
+  updateService: (serviceId, serviceData) => api.put(`/api/caregiver/services/${serviceId}`, serviceData),
+  deleteService: (serviceId) => api.delete(`/api/caregiver/services/${serviceId}`),
   searchServices: (searchParams) => api.post('/api/search/location', searchParams),
 };
 
@@ -64,48 +83,25 @@ export const bookingsAPI = {
   createBooking: (bookingData) => api.post('/api/bookings', bookingData),
   getBooking: (bookingId) => api.get(`/api/bookings/${bookingId}`),
   
-  // Enhanced booking management endpoints
-  getBookingDetails: (bookingId) => api.get(`/api/bookings/${bookingId}/details`),
-  updateBookingStatus: (bookingId, statusData) => api.put(`/api/bookings/${bookingId}/status`, statusData),
+  // Enhanced booking operations
   getUpcomingBookings: () => api.get('/api/bookings/upcoming'),
-  getBookingHistory: () => api.get('/api/bookings/history'),
+  getTodayBookings: () => api.get('/api/bookings/today'),
+  getBookingHistory: (params = {}) => api.get('/api/bookings/history', { params }),
+  getBookingDetails: (bookingId) => api.get(`/api/bookings/${bookingId}/details`),
   
-  // Booking filters and search
-  getBookingsByStatus: (status) => api.get(`/api/bookings?status=${status}`),
-  getBookingsByDateRange: (startDate, endDate) => api.get(`/api/bookings?start_date=${startDate}&end_date=${endDate}`),
-  getFilteredBookings: (filter, limit = 50, offset = 0) => 
-    api.get(`/api/bookings/filter/${filter}?limit=${limit}&offset=${offset}`),
+  // Booking status updates
+  updateBookingStatus: (bookingId, status, data = {}) => 
+    api.put(`/api/bookings/${bookingId}/status`, { status, ...data }),
   
-  confirmBooking: (bookingId) => 
-    api.post(`/api/bookings/${bookingId}/actions/confirm`),
-  
-  startService: (bookingId) => 
-    api.post(`/api/bookings/${bookingId}/actions/start-service`),
-  
-  completeService: (bookingId, completionData) => 
-    api.post(`/api/bookings/${bookingId}/actions/complete`, completionData),
-  
-  getBookingTimeline: (bookingId) => 
-    api.get(`/api/bookings/${bookingId}/timeline`),
+  // Booking filters
+  getFilteredBookings: (filter, params = {}) => 
+    api.get(`/api/bookings/filter/${filter}`, { params }),
 };
 
 export const messagesAPI = {
   getMessages: (bookingId) => api.get(`/api/messages/${bookingId}`),
   sendMessage: (messageData) => api.post('/api/messages', messageData),
-  markAsRead: (messageId) => api.put(`/api/messages/${messageId}`, { is_read: true }),
-};
-
-export const reviewsAPI = {
-  getReviews: (caregiverId) => api.get(`/api/reviews?caregiver_id=${caregiverId}`),
-  createReview: (reviewData) => api.post('/api/reviews', reviewData),
-  updateReview: (reviewId, reviewData) => api.put(`/api/reviews/${reviewId}`, reviewData),
-  deleteReview: (reviewId) => api.delete(`/api/reviews/${reviewId}`),
-};
-
-export const paymentAPI = {
-  createPaymentIntent: (bookingId) => api.post('/api/payments/create-intent', { booking_id: bookingId }),
-  confirmPayment: (paymentData) => api.post('/api/payments/confirm', paymentData),
-  getPaymentHistory: () => api.get('/api/payments/history'),
+  markAsRead: (messageId) => api.put(`/api/messages/${messageId}/read`),
 };
 
 export const uploadAPI = {
@@ -137,10 +133,11 @@ export const locationAPI = {
   getNearbyServices: (lat, lng, radius = 10) => api.get(`/api/search/nearby?lat=${lat}&lng=${lng}&radius=${radius}`),
 };
 
-// Statistics APIs (for dashboard)
+// Statistics APIs (for dashboard) - NEW
 export const statsAPI = {
   getUserStats: () => api.get('/api/stats/user'),
   getCaregiverStats: () => api.get('/api/stats/caregiver'),
+  getCaregiverEarnings: () => api.get('/api/stats/caregiver/earnings'),
   getBookingStats: () => api.get('/api/stats/bookings'),
 };
 
@@ -261,38 +258,67 @@ export const handleApiError = (error) => {
       case 500:
         return 'Server error. Please try again later.';
       default:
-        return data.detail || `Error ${status}: ${error.message}`;
+        return data.detail || data.message || 'An unexpected error occurred.';
     }
   } else if (error.request) {
     // Network error
-    return 'Network error. Please check your connection.';
+    return 'Network error. Please check your connection and try again.';
   } else {
     // Other error
     return error.message || 'An unexpected error occurred.';
   }
 };
 
-// Real-time connection helper (for future WebSocket implementation)
-export const realTimeAPI = {
-  connect: (userId) => {
-    // WebSocket connection will be implemented here
-    console.log(`Connecting to real-time updates for user ${userId}`);
+// Token management utilities
+export const tokenManager = {
+  // Get stored token
+  getToken: async () => {
+    try {
+      return await AsyncStorage.getItem('token');
+    } catch (error) {
+      console.error('Error getting token:', error);
+      return null;
+    }
   },
-  
-  disconnect: () => {
-    // WebSocket disconnection
-    console.log('Disconnecting from real-time updates');
+
+  // Set token
+  setToken: async (token) => {
+    try {
+      await AsyncStorage.setItem('token', token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    } catch (error) {
+      console.error('Error setting token:', error);
+    }
   },
-  
-  subscribeToBookingUpdates: (bookingId, callback) => {
-    // Subscribe to booking status changes
-    console.log(`Subscribing to updates for booking ${bookingId}`);
+
+  // Remove token
+  removeToken: async () => {
+    try {
+      await AsyncStorage.removeItem('token');
+      delete api.defaults.headers.common['Authorization'];
+    } catch (error) {
+      console.error('Error removing token:', error);
+    }
   },
-  
-  subscribeToMessages: (conversationId, callback) => {
-    // Subscribe to new messages
-    console.log(`Subscribing to messages for conversation ${conversationId}`);
+
+  // Check if token exists
+  hasToken: async () => {
+    const token = await tokenManager.getToken();
+    return !!token;
   },
 };
 
+// Initialize token on app start
+export const initializeAPI = async () => {
+  try {
+    const token = await tokenManager.getToken();
+    if (token) {
+      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    }
+  } catch (error) {
+    console.error('Error initializing API:', error);
+  }
+};
+
+// Export the configured axios instance
 export default api;

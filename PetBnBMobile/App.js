@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EmailVerificationScreen from './src/screens/EmailVerificationScreen';
-
+import { initializeAPI } from './src/services/api';
 // Context
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ToastProvider } from './src/context/ToastContext';
@@ -290,6 +290,7 @@ export default function App() {
 
   useEffect(() => {
     async function prepare() {
+      await initializeAPI();
       try {
         // Keep the splash screen visible while we fetch resources
         await SplashScreen.preventAutoHideAsync();

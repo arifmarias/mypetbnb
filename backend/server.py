@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, EmailStr, validator
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
+from stats_endpoints import stats_router
 import jwt
 import os
 import uuid
@@ -1651,9 +1652,514 @@ async def get_booking_messages(booking_id: str, current_user: dict = Depends(get
         logger.error(f"Get messages error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get messages")
 
+@api_router.get("/bookings/today")
+async def get_today_bookings(current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    """Get today's bookings for current user"""
+    try:
+        today = datetime.utcnow().date()
+        today_start = datetime.combine(today, datetime.min.time()).isoformat()
+        today_end = datetime.combine(today, datetime.max.time()).isoformat()
+        
+        if current_user.get("user_type") == "pet_owner":
+            result = await db.table("bookings").select("""
+                *,
+                caregiver_profiles!inner(*, users!caregiver_profiles_user_id_fkey(first_name, last_name, profile_image_url)),
+                pets(name, species, breed),
+                caregiver_services(service_name, title)
+            """).eq("pet_owner_id", current_user["user_id"]).gte("start_datetime", today_start).lte("start_datetime", today_end).order("start_datetime").execute()
+        else:
+            # Get caregiver profile first
+            profile_result = await db.table("caregiver_profiles").select("id").eq("user_id", current_user["user_id"]).execute()
+            if not profile_result.data:
+                return []
+            
+            caregiver_id = profile_result.data[0]["id"]
+            result = await db.table("bookings").select("""
+                *,
+                users!bookings_pet_owner_id_fkey(first_name, last_name, profile_image_url),
+                pets(name, species, breed),
+                caregiver_services(service_name, title)
+            """).eq("caregiver_id", caregiver_id).gte("start_datetime", today_start).lte("start_datetime", today_end).order("start_datetime").execute()
+        
+        return result.data or []
+        
+    except Exception as e:
+        logger.error(f"Get today's bookings error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get today's bookings")
+
+@api_router.put("/bookings/{booking_id}/status")
+async def update_booking_status(
+    booking_id: str, 
+    status_data: dict,
+    current_user: dict = Depends(get_current_user), 
+    db=Depends(get_db_client)
+):
+    """Update booking status"""
+    try:
+        new_status = status_data.get("status")
+        reason = status_data.get("reason", "")
+        
+        if not new_status:
+            raise HTTPException(status_code=400, detail="Status is required")
+        
+        # Validate status
+        valid_statuses = ["pending", "confirmed", "rejected", "in_progress", "completed", "cancelled"]
+        if new_status not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+        
+        # Get booking details
+        booking_result = await db.table("bookings").select("""
+            *,
+            caregiver_profiles!inner(user_id),
+            users!bookings_pet_owner_id_fkey(first_name, last_name, email)
+        """).eq("id", booking_id).execute()
+        
+        if not booking_result.data:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        
+        booking = booking_result.data[0]
+        
+        # Check permissions
+        is_pet_owner = booking["pet_owner_id"] == current_user["user_id"]
+        is_caregiver = booking["caregiver_profiles"]["user_id"] == current_user["user_id"]
+        
+        if not (is_pet_owner or is_caregiver):
+            raise HTTPException(status_code=403, detail="Not authorized to update this booking")
+        
+        # Business logic for status transitions
+        current_status = booking["booking_status"]
+        
+        # Pet owners can only cancel their own bookings
+        if is_pet_owner and new_status not in ["cancelled"]:
+            raise HTTPException(status_code=403, detail="Pet owners can only cancel bookings")
+        
+        # Caregivers can accept/reject pending bookings, start confirmed bookings, complete in-progress bookings
+        if is_caregiver:
+            allowed_transitions = {
+                "pending": ["confirmed", "rejected"],
+                "confirmed": ["in_progress", "cancelled"],
+                "in_progress": ["completed"],
+            }
+            
+            if current_status not in allowed_transitions or new_status not in allowed_transitions[current_status]:
+                raise HTTPException(status_code=400, detail=f"Cannot transition from {current_status} to {new_status}")
+        
+        # Update booking status
+        update_data = {
+            "booking_status": new_status,
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        if reason:
+            update_data["cancellation_reason"] = reason
+        
+        result = await db.table("bookings").update(update_data).eq("id", booking_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to update booking status")
+        
+        # Send notifications (implement based on your notification system)
+        # await send_status_update_notification(booking, new_status, current_user)
+        
+        return {"message": "Booking status updated successfully", "booking": result.data[0]}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update booking status error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update booking status")
+@api_router.get("/stats/user")
+async def get_user_stats(current_user: dict = Depends(get_current_user), db = Depends(get_db_client)):
+    """Get statistics for pet owner users"""
+    try:
+        if current_user.get("user_type") != "pet_owner":
+            raise HTTPException(status_code=403, detail="Only pet owners can access user stats")
+        
+        user_id = current_user["user_id"]
+        logger.info(f"Getting user stats for pet owner: {user_id}")
+        
+        # Get basic stats
+        stats = {}
+        
+        # Total bookings
+        try:
+            bookings_result = await db.table("bookings").select("id, booking_status, total_amount").eq("pet_owner_id", user_id).execute()
+            bookings = bookings_result.data or []
+            logger.info(f"Found {len(bookings)} bookings for user {user_id}")
+            
+            stats["total_bookings"] = len(bookings)
+            stats["completed_bookings"] = len([b for b in bookings if b.get("booking_status") == "completed"])
+            stats["total_spent"] = sum(float(b.get("total_amount", 0)) for b in bookings if b.get("booking_status") == "completed")
+        except Exception as e:
+            logger.error(f"Error getting bookings: {e}")
+            stats["total_bookings"] = 0
+            stats["completed_bookings"] = 0
+            stats["total_spent"] = 0
+        
+        # Upcoming services
+        try:
+            current_time = datetime.utcnow().isoformat()
+            upcoming_result = await db.table("bookings").select("id").eq("pet_owner_id", user_id).gte("start_datetime", current_time).in_("booking_status", ["pending", "confirmed"]).execute()
+            stats["upcoming_services"] = len(upcoming_result.data or [])
+        except Exception as e:
+            logger.error(f"Error getting upcoming services: {e}")
+            stats["upcoming_services"] = 0
+        
+        # Active pets
+        try:
+            pets_result = await db.table("pets").select("id").eq("owner_id", user_id).eq("is_active", True).execute()
+            stats["active_pets"] = len(pets_result.data or [])
+            logger.info(f"Found {stats['active_pets']} active pets for user {user_id}")
+        except Exception as e:
+            logger.error(f"Error getting pets: {e}")
+            stats["active_pets"] = 0
+        
+        # Average rating (from reviews given by this pet owner)
+        try:
+            reviews_result = await db.table("reviews").select("rating").eq("pet_owner_id", user_id).execute()
+            reviews = reviews_result.data or []
+            if reviews:
+                stats["average_rating"] = round(sum(r.get("rating", 0) for r in reviews) / len(reviews), 1)
+            else:
+                stats["average_rating"] = 0
+        except Exception as e:
+            logger.error(f"Error getting reviews: {e}")
+            stats["average_rating"] = 0
+        
+        # Favorite caregivers count
+        try:
+            favorites_result = await db.table("user_favorites").select("id").eq("user_id", user_id).execute()
+            stats["favorite_caregivers"] = len(favorites_result.data or [])
+        except Exception as e:
+            logger.error(f"Error getting favorites: {e}")
+            stats["favorite_caregivers"] = 0
+        
+        logger.info(f"Returning stats for user {user_id}: {stats}")
+        return stats
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get user stats error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get user statistics: {str(e)}")
+
+@api_router.get("/stats/caregiver")
+async def get_caregiver_stats(current_user: dict = Depends(get_current_user), db = Depends(get_db_client)):
+    """Get statistics for caregiver users"""
+    try:
+        if current_user.get("user_type") != "caregiver":
+            raise HTTPException(status_code=403, detail="Only caregivers can access caregiver stats")
+        
+        user_id = current_user["user_id"]
+        logger.info(f"Getting caregiver stats for user: {user_id}")
+        
+        # Get caregiver profile
+        profile_result = await db.table("caregiver_profiles").select("*").eq("user_id", user_id).execute()
+        if not profile_result.data:
+            logger.warning(f"No caregiver profile found for user {user_id}")
+            # Return default stats if no profile found
+            return {
+                "average_rating": 0,
+                "total_reviews": 0,
+                "total_bookings": 0,
+                "completed_bookings": 0,
+                "response_rate": 0,
+                "acceptance_rate": 0,
+                "active_services": 0
+            }
+        
+        profile = profile_result.data[0]
+        caregiver_id = profile["id"]
+        logger.info(f"Found caregiver profile: {caregiver_id}")
+        
+        stats = {}
+        
+        # Basic profile stats
+        stats["average_rating"] = float(profile.get("rating", 0))
+        stats["total_reviews"] = int(profile.get("total_reviews", 0))
+        
+        # Booking stats
+        try:
+            bookings_result = await db.table("bookings").select("id, booking_status, total_amount, created_at").eq("caregiver_id", caregiver_id).execute()
+            bookings = bookings_result.data or []
+            
+            stats["total_bookings"] = len(bookings)
+            stats["completed_bookings"] = len([b for b in bookings if b.get("booking_status") == "completed"])
+            
+            # Calculate response rate and acceptance rate
+            pending_bookings = [b for b in bookings if b.get("booking_status") == "pending"]
+            responded_bookings = [b for b in bookings if b.get("booking_status") in ["confirmed", "rejected"]]
+            accepted_bookings = [b for b in bookings if b.get("booking_status") == "confirmed"]
+            
+            total_requests = len(bookings)
+            if total_requests > 0:
+                stats["response_rate"] = round((len(responded_bookings) / total_requests) * 100, 1)
+                stats["acceptance_rate"] = round((len(accepted_bookings) / total_requests) * 100, 1)
+            else:
+                stats["response_rate"] = 0
+                stats["acceptance_rate"] = 0
+        except Exception as e:
+            logger.error(f"Error getting booking stats: {e}")
+            stats["total_bookings"] = 0
+            stats["completed_bookings"] = 0
+            stats["response_rate"] = 0
+            stats["acceptance_rate"] = 0
+        
+        # Active services
+        try:
+            services_result = await db.table("caregiver_services").select("id").eq("caregiver_id", caregiver_id).eq("is_active", True).execute()
+            stats["active_services"] = len(services_result.data or [])
+        except Exception as e:
+            logger.error(f"Error getting services: {e}")
+            stats["active_services"] = 0
+        
+        logger.info(f"Returning caregiver stats: {stats}")
+        return stats
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get caregiver stats error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get caregiver statistics: {str(e)}")
+
+@api_router.get("/stats/caregiver/earnings")
+async def get_caregiver_earnings(current_user: dict = Depends(get_current_user), db = Depends(get_db_client)):
+    """Get earnings statistics for caregiver"""
+    try:
+        if current_user.get("user_type") != "caregiver":
+            raise HTTPException(status_code=403, detail="Only caregivers can access earnings stats")
+        
+        user_id = current_user["user_id"]
+        logger.info(f"Getting caregiver earnings for user: {user_id}")
+        
+        # Get caregiver profile
+        profile_result = await db.table("caregiver_profiles").select("id").eq("user_id", user_id).execute()
+        if not profile_result.data:
+            logger.warning(f"No caregiver profile found for user {user_id}")
+            # Return default earnings if no profile found
+            return {
+                "total_earnings": 0,
+                "current_month_earnings": 0,
+                "last_month_earnings": 0,
+                "current_week_earnings": 0,
+                "pending_payouts": 0,
+                "completed_payouts": 0
+            }
+        
+        caregiver_id = profile_result.data[0]["id"]
+        
+        # Get completed bookings with amounts
+        try:
+            bookings_result = await db.table("bookings").select("total_amount, created_at, start_datetime").eq("caregiver_id", caregiver_id).eq("booking_status", "completed").execute()
+            bookings = bookings_result.data or []
+            logger.info(f"Found {len(bookings)} completed bookings for caregiver {caregiver_id}")
+        except Exception as e:
+            logger.error(f"Error getting completed bookings: {e}")
+            bookings = []
+        
+        earnings = {}
+        
+        # Calculate total earnings (subtract 10% commission)
+        total_gross = sum(float(b.get("total_amount", 0)) for b in bookings)
+        commission_rate = 0.10  # 10% commission
+        earnings["total_earnings"] = round(total_gross * (1 - commission_rate), 2)
+        
+        # Current month earnings
+        now = datetime.utcnow()
+        current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        try:
+            current_month_bookings = []
+            for b in bookings:
+                if b.get("start_datetime"):
+                    booking_date = datetime.fromisoformat(b.get("start_datetime").replace('Z', '+00:00'))
+                    if booking_date >= current_month_start:
+                        current_month_bookings.append(b)
+            
+            current_month_gross = sum(float(b.get("total_amount", 0)) for b in current_month_bookings)
+            earnings["current_month_earnings"] = round(current_month_gross * (1 - commission_rate), 2)
+        except Exception as e:
+            logger.error(f"Error calculating current month earnings: {e}")
+            earnings["current_month_earnings"] = 0
+        
+        # Last month earnings
+        try:
+            last_month_start = (current_month_start - timedelta(days=1)).replace(day=1)
+            last_month_end = current_month_start - timedelta(days=1)
+            
+            last_month_bookings = []
+            for b in bookings:
+                if b.get("start_datetime"):
+                    booking_date = datetime.fromisoformat(b.get("start_datetime").replace('Z', '+00:00'))
+                    if last_month_start <= booking_date <= last_month_end:
+                        last_month_bookings.append(b)
+            
+            last_month_gross = sum(float(b.get("total_amount", 0)) for b in last_month_bookings)
+            earnings["last_month_earnings"] = round(last_month_gross * (1 - commission_rate), 2)
+        except Exception as e:
+            logger.error(f"Error calculating last month earnings: {e}")
+            earnings["last_month_earnings"] = 0
+        
+        # Current week earnings
+        try:
+            week_start = now - timedelta(days=now.weekday())
+            week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            current_week_bookings = []
+            for b in bookings:
+                if b.get("start_datetime"):
+                    booking_date = datetime.fromisoformat(b.get("start_datetime").replace('Z', '+00:00'))
+                    if booking_date >= week_start:
+                        current_week_bookings.append(b)
+            
+            current_week_gross = sum(float(b.get("total_amount", 0)) for b in current_week_bookings)
+            earnings["current_week_earnings"] = round(current_week_gross * (1 - commission_rate), 2)
+        except Exception as e:
+            logger.error(f"Error calculating current week earnings: {e}")
+            earnings["current_week_earnings"] = 0
+        
+        # Pending payouts (for completed but unpaid bookings)
+        earnings["pending_payouts"] = 0  # Placeholder - implement based on payment system
+        earnings["completed_payouts"] = earnings["total_earnings"]  # Placeholder
+        
+        logger.info(f"Returning caregiver earnings: {earnings}")
+        return earnings
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get caregiver earnings error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get caregiver earnings: {str(e)}")
+
+@api_router.get("/bookings/today")
+async def get_today_bookings(current_user: dict = Depends(get_current_user), db=Depends(get_db_client)):
+    """Get today's bookings for current user"""
+    try:
+        today = datetime.utcnow().date()
+        today_start = datetime.combine(today, datetime.min.time()).isoformat()
+        today_end = datetime.combine(today, datetime.max.time()).isoformat()
+        
+        logger.info(f"Getting today's bookings for user {current_user['user_id']} between {today_start} and {today_end}")
+        
+        if current_user.get("user_type") == "pet_owner":
+            result = await db.table("bookings").select("""
+                *,
+                caregiver_profiles!inner(*, users!caregiver_profiles_user_id_fkey(first_name, last_name, profile_image_url)),
+                pets(name, species, breed),
+                caregiver_services(service_name, title)
+            """).eq("pet_owner_id", current_user["user_id"]).gte("start_datetime", today_start).lte("start_datetime", today_end).order("start_datetime").execute()
+        else:
+            # Get caregiver profile first
+            profile_result = await db.table("caregiver_profiles").select("id").eq("user_id", current_user["user_id"]).execute()
+            if not profile_result.data:
+                logger.warning(f"No caregiver profile found for user {current_user['user_id']}")
+                return []
+            
+            caregiver_id = profile_result.data[0]["id"]
+            result = await db.table("bookings").select("""
+                *,
+                users!bookings_pet_owner_id_fkey(first_name, last_name, profile_image_url),
+                pets(name, species, breed),
+                caregiver_services(service_name, title)
+            """).eq("caregiver_id", caregiver_id).gte("start_datetime", today_start).lte("start_datetime", today_end).order("start_datetime").execute()
+        
+        bookings = result.data or []
+        logger.info(f"Found {len(bookings)} bookings for today")
+        return bookings
+        
+    except Exception as e:
+        logger.error(f"Get today's bookings error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get today's bookings: {str(e)}")
+
+@api_router.put("/bookings/{booking_id}/status")
+async def update_booking_status(
+    booking_id: str, 
+    status_data: dict,
+    current_user: dict = Depends(get_current_user), 
+    db=Depends(get_db_client)
+):
+    """Update booking status"""
+    try:
+        new_status = status_data.get("status")
+        reason = status_data.get("reason", "")
+        
+        if not new_status:
+            raise HTTPException(status_code=400, detail="Status is required")
+        
+        # Validate status
+        valid_statuses = ["pending", "confirmed", "rejected", "in_progress", "completed", "cancelled"]
+        if new_status not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {valid_statuses}")
+        
+        logger.info(f"Updating booking {booking_id} status to {new_status}")
+        
+        # Get booking details
+        booking_result = await db.table("bookings").select("*").eq("id", booking_id).execute()
+        
+        if not booking_result.data:
+            raise HTTPException(status_code=404, detail="Booking not found")
+        
+        booking = booking_result.data[0]
+        
+        # Check permissions
+        is_pet_owner = booking["pet_owner_id"] == current_user["user_id"]
+        is_caregiver = False
+        
+        if current_user.get("user_type") == "caregiver":
+            # Get caregiver profile to check if they own this booking
+            profile_result = await db.table("caregiver_profiles").select("id").eq("user_id", current_user["user_id"]).execute()
+            if profile_result.data:
+                caregiver_id = profile_result.data[0]["id"]
+                is_caregiver = booking["caregiver_id"] == caregiver_id
+        
+        if not (is_pet_owner or is_caregiver):
+            raise HTTPException(status_code=403, detail="Not authorized to update this booking")
+        
+        # Business logic for status transitions
+        current_status = booking["booking_status"]
+        
+        # Pet owners can only cancel their own bookings
+        if is_pet_owner and new_status not in ["cancelled"]:
+            raise HTTPException(status_code=403, detail="Pet owners can only cancel bookings")
+        
+        # Caregivers can accept/reject pending bookings, start confirmed bookings, complete in-progress bookings
+        if is_caregiver:
+            allowed_transitions = {
+                "pending": ["confirmed", "rejected"],
+                "confirmed": ["in_progress", "cancelled"],
+                "in_progress": ["completed"],
+            }
+            
+            if current_status not in allowed_transitions or new_status not in allowed_transitions[current_status]:
+                raise HTTPException(status_code=400, detail=f"Cannot transition from {current_status} to {new_status}")
+        
+        # Update booking status
+        update_data = {
+            "booking_status": new_status,
+            "updated_at": datetime.utcnow().isoformat()
+        }
+        
+        if reason:
+            update_data["cancellation_reason"] = reason
+        
+        result = await db.table("bookings").update(update_data).eq("id", booking_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to update booking status")
+        
+        logger.info(f"Successfully updated booking {booking_id} status to {new_status}")
+        return {"message": "Booking status updated successfully", "booking": result.data[0]}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update booking status error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update booking status: {str(e)}")
+    
 # Include router
 app.include_router(api_router)
 app.include_router(booking_router)
+app.include_router(stats_router)
 # Root endpoint
 @app.get("/")
 async def root():

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,85 +7,138 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Alert,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useFocusEffect } from '@react-navigation/native';
+import DashboardService from '../services/DashboardService';
 
 const CaregiverDashboard = ({ navigation }) => {
   const { user } = useAuth();
   const toast = useToast();
-  const [todayBookings, setTodayBookings] = useState([]);
-  const [upcomingBookings, setUpcomingBookings] = useState([]);
-  const [stats, setStats] = useState({
-    thisMonth: 0,
-    totalEarnings: 0,
-    rating: 0,
-    totalBookings: 0,
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [dashboardData, setDashboardData] = useState({
+    stats: {
+      rating: 0,
+      totalBookings: 0,
+    },
+    earnings: {
+      thisMonth: 0,
+      totalEarnings: 0,
+    },
+    todayBookings: [],
+    upcomingBookings: [],
+    services: [],
   });
+  const [error, setError] = useState(null);
 
+  // Load dashboard data
+  const loadDashboardData = async (showRefreshIndicator = false) => {
+    try {
+      if (showRefreshIndicator) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+      setError(null);
+
+      const data = await DashboardService.getCaregiverDashboardData(user?.id);
+      
+      if (data.error) {
+        setError(data.error);
+        toast.error('Failed to load dashboard data');
+      } else {
+        setDashboardData(data);
+      }
+    } catch (err) {
+      console.error('Dashboard load error:', err);
+      setError('Failed to load dashboard data');
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Initial load
   useEffect(() => {
-    loadDashboardData();
+    if (user?.id) {
+      loadDashboardData();
+    }
+  }, [user?.id]);
+
+  // Refresh when screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id && !loading) {
+        loadDashboardData();
+      }
+    }, [user?.id])
+  );
+
+  // Pull to refresh
+  const onRefresh = useCallback(() => {
+    loadDashboardData(true);
   }, []);
 
-  const loadDashboardData = () => {
-    // Mock data - replace with API calls
-    setStats({
-      thisMonth: 580,
-      totalEarnings: 2400,
-      rating: 4.9,
-      totalBookings: 48,
-    });
+  // Handle booking actions
+  const handleBookingAction = async (bookingId, action) => {
+    try {
+      let result;
+      let confirmMessage = '';
+      let successMessage = '';
 
-    setTodayBookings([
-      {
-        id: '1',
-        service: 'Dog Walking',
-        time: '3:00 PM',
-        owner: {
-          name: 'Jennifer Smith',
-          image: null,
-        },
-        pets: [{ name: 'Buddy', breed: 'Golden Retriever' }],
-        status: 'confirmed',
-        amount: 30,
-        duration: '1 hour',
-        location: 'Petaling Jaya',
-      },
-    ]);
+      switch (action) {
+        case 'accept':
+          confirmMessage = 'Accept this booking?';
+          successMessage = 'Booking accepted successfully';
+          result = await DashboardService.acceptBooking(bookingId);
+          break;
+        case 'decline':
+          confirmMessage = 'Decline this booking?';
+          successMessage = 'Booking declined';
+          result = await DashboardService.declineBooking(bookingId);
+          break;
+        case 'start':
+          confirmMessage = 'Start this service?';
+          successMessage = 'Service started';
+          result = await DashboardService.startService(bookingId);
+          break;
+        case 'complete':
+          confirmMessage = 'Mark this service as completed?';
+          successMessage = 'Service completed';
+          result = await DashboardService.completeService(bookingId);
+          break;
+        default:
+          return;
+      }
 
-    setUpcomingBookings([
-      {
-        id: '2',
-        service: 'Pet Boarding',
-        date: 'Dec 30, 2024',
-        time: '2:00 PM',
-        owner: {
-          name: 'David Wilson',
-          image: null,
-        },
-        pets: [{ name: 'Max', breed: 'Labrador' }, { name: 'Luna', breed: 'Persian Cat' }],
-        status: 'confirmed',
-        amount: 150,
-        duration: '3 days',
-        location: 'Kuala Lumpur',
-      },
-      {
-        id: '3',
-        service: 'Pet Grooming',
-        date: 'Jan 2, 2025',
-        time: '10:00 AM',
-        owner: {
-          name: 'Lisa Chen',
-          image: null,
-        },
-        pets: [{ name: 'Mochi', breed: 'Shih Tzu' }],
-        status: 'pending',
-        amount: 80,
-        duration: '2 hours',
-        location: 'Mont Kiara',
-      },
-    ]);
+      Alert.alert(
+        'Confirm Action',
+        confirmMessage,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Confirm',
+            onPress: async () => {
+              if (result.success) {
+                toast.success(successMessage);
+                loadDashboardData();
+              } else {
+                toast.error(result.error || 'Failed to perform action');
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Booking action error:', error);
+      toast.error('Failed to perform action');
+    }
   };
 
   const getStatusColor = (status) => {
@@ -103,104 +156,109 @@ const CaregiverDashboard = ({ navigation }) => {
     }
   };
 
-  const handleBookingAction = (bookingId, action) => {
-    Alert.alert(
-      'Confirm Action',
-      `Are you sure you want to ${action} this booking?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: () => {
-            toast.success(`Booking ${action}d successfully`);
-            // Here you would make API call
-          },
-        },
-      ]
-    );
-  };
-
-  // Fix: Render items without VirtualizedList
   const renderTodayBookings = () => {
-    return todayBookings.map((item) => (
+    if (!dashboardData.todayBookings.length) {
+      return null;
+    }
+
+    return dashboardData.todayBookings.map((booking) => (
       <TouchableOpacity 
-        key={item.id}
+        key={booking.id}
         style={styles.todayBookingCard}
-        onPress={() => navigation.navigate('BookingDetails', { bookingId: item.id })}
+        onPress={() => navigation.navigate('BookingDetails', { bookingId: booking.id })}
       >
         <View style={styles.bookingHeader}>
           <View style={styles.bookingInfo}>
-            <Text style={styles.serviceName}>{item.service}</Text>
-            <Text style={styles.bookingTime}>{item.time}</Text>
-            <Text style={styles.ownerName}>{item.owner.name}</Text>
+            <Text style={styles.serviceName}>{booking.service}</Text>
+            <Text style={styles.bookingTime}>{booking.time}</Text>
+            <Text style={styles.ownerName}>
+              {booking.owner?.name || 'Owner not specified'}
+            </Text>
             <Text style={styles.petsInfo}>
-              {item.pets.map(pet => `${pet.name} (${pet.breed})`).join(', ')}
+              {booking.pets?.map(pet => `${pet.name} (${pet.breed || pet.species})`).join(', ') || 'No pets specified'}
             </Text>
           </View>
           <View style={styles.bookingRight}>
-            <Text style={styles.amount}>RM{item.amount}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-              <Text style={styles.statusText}>{item.status}</Text>
+            <Text style={styles.amount}>RM{booking.amount}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.status) }]}>
+              <Text style={styles.statusText}>{booking.status}</Text>
             </View>
           </View>
         </View>
         <View style={styles.bookingActions}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => navigation.navigate('Chat', { bookingId: item.id })}
+            onPress={() => navigation.navigate('Chat', { bookingId: booking.id })}
           >
             <Ionicons name="chatbubble-outline" size={16} color="#FF5A5F" />
             <Text style={styles.actionButtonText}>Message</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.primaryActionButton]}
-            onPress={() => handleBookingAction(item.id, 'start')}
-          >
-            <Ionicons name="play-outline" size={16} color="white" />
-            <Text style={[styles.actionButtonText, { color: 'white' }]}>Start</Text>
-          </TouchableOpacity>
+          {booking.status === 'confirmed' && (
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.primaryActionButton]}
+              onPress={() => handleBookingAction(booking.id, 'start')}
+            >
+              <Ionicons name="play-outline" size={16} color="white" />
+              <Text style={[styles.actionButtonText, { color: 'white' }]}>Start</Text>
+            </TouchableOpacity>
+          )}
+          {booking.status === 'in_progress' && (
+            <TouchableOpacity 
+              style={[styles.actionButton, styles.completeButton]}
+              onPress={() => handleBookingAction(booking.id, 'complete')}
+            >
+              <Ionicons name="checkmark-outline" size={16} color="white" />
+              <Text style={[styles.actionButtonText, { color: 'white' }]}>Complete</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
     ));
   };
 
   const renderUpcomingBookings = () => {
-    return upcomingBookings.map((item) => (
+    if (!dashboardData.upcomingBookings.length) {
+      return null;
+    }
+
+    return dashboardData.upcomingBookings.map((booking) => (
       <TouchableOpacity 
-        key={item.id}
+        key={booking.id}
         style={styles.upcomingBookingCard}
-        onPress={() => navigation.navigate('BookingDetails', { bookingId: item.id })}
+        onPress={() => navigation.navigate('BookingDetails', { bookingId: booking.id })}
       >
         <View style={styles.bookingHeader}>
           <View style={styles.bookingInfo}>
-            <Text style={styles.serviceName}>{item.service}</Text>
-            <Text style={styles.bookingDate}>{item.date} at {item.time}</Text>
-            <Text style={styles.ownerName}>{item.owner.name}</Text>
-            <Text style={styles.location}>{item.location}</Text>
+            <Text style={styles.serviceName}>{booking.service}</Text>
+            <Text style={styles.bookingDate}>{booking.date} at {booking.time}</Text>
+            <Text style={styles.ownerName}>
+              {booking.owner?.name || 'Owner not specified'}
+            </Text>
+            <Text style={styles.location}>{booking.location}</Text>
           </View>
           <View style={styles.bookingRight}>
-            <Text style={styles.amount}>RM{item.amount}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) }]}>
-              <Text style={styles.statusText}>{item.status}</Text>
+            <Text style={styles.amount}>RM{booking.amount}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.status) }]}>
+              <Text style={styles.statusText}>{booking.status}</Text>
             </View>
           </View>
         </View>
         <View style={styles.petsSection}>
           <Text style={styles.petsLabel}>
-            Pets: {item.pets.map(pet => pet.name).join(', ')}
+            Pets: {booking.pets?.map(pet => pet.name).join(', ') || 'No pets specified'}
           </Text>
         </View>
-        {item.status === 'pending' && (
+        {booking.status === 'pending' && (
           <View style={styles.pendingActions}>
             <TouchableOpacity 
               style={[styles.actionButton, styles.declineButton]}
-              onPress={() => handleBookingAction(item.id, 'decline')}
+              onPress={() => handleBookingAction(booking.id, 'decline')}
             >
               <Text style={[styles.actionButtonText, { color: '#FF5A5F' }]}>Decline</Text>
             </TouchableOpacity>
             <TouchableOpacity 
               style={[styles.actionButton, styles.acceptButton]}
-              onPress={() => handleBookingAction(item.id, 'accept')}
+              onPress={() => handleBookingAction(booking.id, 'accept')}
             >
               <Text style={[styles.actionButtonText, { color: 'white' }]}>Accept</Text>
             </TouchableOpacity>
@@ -210,9 +268,31 @@ const CaregiverDashboard = ({ navigation }) => {
     ));
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF5A5F" />
+          <Text style={styles.loadingText}>Loading your dashboard...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#FF5A5F']}
+            tintColor="#FF5A5F"
+          />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <View>
@@ -228,18 +308,29 @@ const CaregiverDashboard = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
+        {/* Error State */}
+        {error && (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle" size={24} color="#FF5A5F" />
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={() => loadDashboardData()}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Earnings Overview */}
         <View style={styles.earningsSection}>
           <Text style={styles.sectionTitle}>Your Earnings</Text>
           <View style={styles.earningsCard}>
             <View style={styles.earningsItem}>
               <Text style={styles.earningsLabel}>This Month</Text>
-              <Text style={styles.earningsValue}>RM{stats.thisMonth}</Text>
+              <Text style={styles.earningsValue}>RM{dashboardData.earnings.thisMonth}</Text>
             </View>
             <View style={styles.earningsDivider} />
             <View style={styles.earningsItem}>
               <Text style={styles.earningsLabel}>Total Earned</Text>
-              <Text style={styles.earningsValue}>RM{stats.totalEarnings}</Text>
+              <Text style={styles.earningsValue}>RM{dashboardData.earnings.totalEarnings}</Text>
             </View>
           </View>
         </View>
@@ -249,12 +340,12 @@ const CaregiverDashboard = ({ navigation }) => {
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
               <Ionicons name="star" size={24} color="#FFD700" />
-              <Text style={styles.statNumber}>{stats.rating}</Text>
+              <Text style={styles.statNumber}>{dashboardData.stats.rating}</Text>
               <Text style={styles.statLabel}>Rating</Text>
             </View>
             <View style={styles.statCard}>
               <Ionicons name="calendar" size={24} color="#FF5A5F" />
-              <Text style={styles.statNumber}>{stats.totalBookings}</Text>
+              <Text style={styles.statNumber}>{dashboardData.stats.totalBookings}</Text>
               <Text style={styles.statLabel}>Total Bookings</Text>
             </View>
           </View>
@@ -286,7 +377,7 @@ const CaregiverDashboard = ({ navigation }) => {
         </View>
 
         {/* Today's Schedule */}
-        {todayBookings.length > 0 && (
+        {dashboardData.todayBookings.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Today's Schedule</Text>
@@ -298,13 +389,12 @@ const CaregiverDashboard = ({ navigation }) => {
                 })}
               </Text>
             </View>
-            {/* Fixed: No more FlatList, just render directly */}
             {renderTodayBookings()}
           </View>
         )}
 
         {/* Upcoming Bookings */}
-        {upcomingBookings.length > 0 && (
+        {dashboardData.upcomingBookings.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Upcoming Bookings</Text>
@@ -312,13 +402,12 @@ const CaregiverDashboard = ({ navigation }) => {
                 <Text style={styles.seeAllText}>See all</Text>
               </TouchableOpacity>
             </View>
-            {/* Fixed: No more FlatList, just render directly */}
             {renderUpcomingBookings()}
           </View>
         )}
 
         {/* Empty State */}
-        {todayBookings.length === 0 && upcomingBookings.length === 0 && (
+        {dashboardData.todayBookings.length === 0 && dashboardData.upcomingBookings.length === 0 && !error && (
           <View style={styles.emptyState}>
             <Ionicons name="calendar-clear-outline" size={64} color="#CCC" />
             <Text style={styles.emptyTitle}>No bookings scheduled</Text>
@@ -362,6 +451,45 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 50,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorContainer: {
+    backgroundColor: '#FFF5F5',
+    marginHorizontal: 20,
+    marginTop: 10,
+    padding: 16,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FED7D7',
+  },
+  errorText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 14,
+    color: '#C53030',
+  },
+  retryButton: {
+    backgroundColor: '#FF5A5F',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
   },
   header: {
     flexDirection: 'row',
@@ -627,6 +755,10 @@ const styles = StyleSheet.create({
   primaryActionButton: {
     backgroundColor: '#FF5A5F',
     borderColor: '#FF5A5F',
+  },
+  completeButton: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
   },
   acceptButton: {
     backgroundColor: '#10B981',
