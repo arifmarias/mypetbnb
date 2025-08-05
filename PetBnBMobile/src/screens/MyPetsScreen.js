@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,76 +7,85 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Image,
-  Alert,
   RefreshControl,
-  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useFocusEffect } from '@react-navigation/native';
-import { petsAPI } from '../services/api';
 
 const MyPetsScreen = ({ navigation }) => {
   const { user } = useAuth();
   const toast = useToast();
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [pets, setPets] = useState([]);
-  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Load pets data
-  const loadPets = async (showRefreshIndicator = false) => {
+  // Mock data - replace with actual API call
+  const mockPets = [
+    {
+      id: '1',
+      name: 'Buddy',
+      breed: 'Golden Retriever',
+      age: 3,
+      weight: 25,
+      gender: 'Male',
+      color: 'Golden',
+      image: 'https://images.unsplash.com/photo-1552053831-71594a27632d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+      lastCheckup: '2024-01-15',
+      isActive: true,
+    },
+    {
+      id: '2',
+      name: 'Luna',
+      breed: 'Siamese Cat',
+      age: 2,
+      weight: 4.5,
+      gender: 'Female',
+      color: 'Cream/Brown',
+      image: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+      lastCheckup: '2024-02-20',
+      isActive: true,
+    },
+    {
+      id: '3',
+      name: 'Charlie',
+      breed: 'French Bulldog',
+      age: 1,
+      weight: 12,
+      gender: 'Male',
+      color: 'Brindle',
+      image: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+      lastCheckup: '2024-03-10',
+      isActive: true,
+    },
+  ];
+
+  const loadPets = async () => {
+    setLoading(true);
     try {
-      if (showRefreshIndicator) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
-      setError(null);
-
-      console.log('Loading pets for user:', user?.id);
-      const response = await petsAPI.getPets();
-      const petsData = response.data || [];
-      
-      console.log('Pets loaded:', petsData);
-      setPets(petsData);
-    } catch (err) {
-      console.error('Load pets error:', err);
-      setError('Failed to load pets');
+      // Mock API call - replace with actual API
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setPets(mockPets);
+    } catch (error) {
+      console.error('Error loading pets:', error);
       toast.error('Failed to load pets');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
-  // Initial load
-  useEffect(() => {
-    if (user?.id) {
-      loadPets();
-    }
-  }, [user?.id]);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadPets();
+    setRefreshing(false);
+  };
 
-  // Refresh when screen comes into focus
-  useFocusEffect(
-    useCallback(() => {
-      if (user?.id && !loading) {
-        loadPets();
-      }
-    }, [user?.id])
-  );
-
-  // Pull to refresh
-  const onRefresh = useCallback(() => {
-    loadPets(true);
-  }, []);
-
-  // Handle pet deletion
   const handleDeletePet = (petId, petName) => {
     Alert.alert(
       'Delete Pet',
-      `Are you sure you want to delete ${petName}? This action cannot be undone.`,
+      `Are you sure you want to remove ${petName} from your pets? This action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -84,11 +93,11 @@ const MyPetsScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await petsAPI.deletePet(petId);
-              toast.success('Pet deleted successfully');
-              loadPets();
+              // Mock delete - replace with actual API call
+              setPets(prev => prev.filter(pet => pet.id !== petId));
+              toast.success(`${petName} has been removed from your pets`);
             } catch (error) {
-              console.error('Delete pet error:', error);
+              console.error('Error deleting pet:', error);
               toast.error('Failed to delete pet');
             }
           },
@@ -97,147 +106,88 @@ const MyPetsScreen = ({ navigation }) => {
     );
   };
 
-  // Calculate pet age
-  const calculateAge = (birthDate) => {
-    if (!birthDate) return 'Unknown';
-    
-    const birth = new Date(birthDate);
-    const today = new Date();
-    const diffTime = Math.abs(today - birth);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays < 365) {
-      const months = Math.floor(diffDays / 30);
-      return months > 0 ? `${months} months` : 'Less than 1 month';
-    } else {
-      const years = Math.floor(diffDays / 365);
-      const months = Math.floor((diffDays % 365) / 30);
-      return months > 0 ? `${years} years, ${months} months` : `${years} years`;
-    }
+  const getAgeText = (age) => {
+    if (age < 1) return `${Math.round(age * 12)} months`;
+    return age === 1 ? '1 year' : `${age} years`;
   };
 
-  // Get vaccination status
-  const getVaccinationStatus = (pet) => {
-    if (!pet.vaccination_records || pet.vaccination_records.length === 0) {
-      return { status: 'incomplete', text: 'No records', color: '#F59E0B' };
-    }
-    
-    // Check if basic vaccines are up to date (simplified logic)
-    const hasRecentVaccination = pet.vaccination_records.some(record => {
-      const vaccinationDate = new Date(record.date);
-      const monthsAgo = new Date();
-      monthsAgo.setMonth(monthsAgo.getMonth() - 12); // 1 year ago
-      return vaccinationDate >= monthsAgo;
-    });
-    
-    return hasRecentVaccination 
-      ? { status: 'complete', text: 'Up to date', color: '#10B981' }
-      : { status: 'incomplete', text: 'Needs update', color: '#F59E0B' };
-  };
-
-  const renderPetCard = (pet) => {
-    const vaccination = getVaccinationStatus(pet);
-    const age = calculateAge(pet.birth_date);
-    
-    return (
-      <TouchableOpacity
-        key={pet.id}
-        style={styles.petCard}
-        onPress={() => navigation.navigate('PetDetails', { petId: pet.id })}
-      >
-        <View style={styles.petImageContainer}>
-          {pet.images && pet.images.length > 0 ? (
-            <Image source={{ uri: pet.images[0] }} style={styles.petImage} />
-          ) : (
-            <View style={styles.petImagePlaceholder}>
-              <Ionicons name="paw" size={40} color="#CCC" />
-            </View>
-          )}
-          
-          {/* Edit button */}
+  const renderPetCard = (pet) => (
+    <TouchableOpacity
+      key={pet.id}
+      style={styles.petCard}
+      onPress={() => navigation.navigate('PetDetails', { petId: pet.id })}
+    >
+      <Image source={{ uri: pet.image }} style={styles.petImage} />
+      
+      <View style={styles.petInfo}>
+        <View style={styles.petHeader}>
+          <Text style={styles.petName}>{pet.name}</Text>
           <TouchableOpacity
-            style={styles.editPetButton}
-            onPress={() => navigation.navigate('AddPet', { petId: pet.id, mode: 'edit' })}
+            onPress={() => handleDeletePet(pet.id, pet.name)}
+            style={styles.deleteButton}
           >
-            <Ionicons name="create" size={16} color="white" />
+            <Ionicons name="trash-outline" size={20} color="#EF4444" />
           </TouchableOpacity>
         </View>
-
-        <View style={styles.petInfo}>
-          <View style={styles.petHeader}>
-            <Text style={styles.petName}>{pet.name}</Text>
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={() => handleDeletePet(pet.id, pet.name)}
-            >
-              <Ionicons name="trash-outline" size={20} color="#FF5A5F" />
-            </TouchableOpacity>
+        
+        <Text style={styles.petBreed}>{pet.breed}</Text>
+        
+        <View style={styles.petDetails}>
+          <View style={styles.detailItem}>
+            <Ionicons name="calendar-outline" size={16} color="#666" />
+            <Text style={styles.detailText}>{getAgeText(pet.age)} old</Text>
           </View>
-
-          <Text style={styles.petBreed}>{pet.breed} • {pet.species}</Text>
-          <Text style={styles.petAge}>Age: {age}</Text>
           
-          {pet.weight && (
-            <Text style={styles.petWeight}>Weight: {pet.weight} kg</Text>
-          )}
-
-          <View style={styles.petTags}>
-            <View style={[styles.tag, { backgroundColor: pet.gender === 'male' ? '#3B82F6' : '#EC4899' }]}>
-              <Text style={styles.tagText}>{pet.gender}</Text>
-            </View>
-            
-            <View style={[styles.tag, { backgroundColor: vaccination.color }]}>
-              <Text style={styles.tagText}>{vaccination.text}</Text>
-            </View>
+          <View style={styles.detailItem}>
+            <Ionicons 
+              name={pet.gender === 'Male' ? 'male' : 'female'} 
+              size={16} 
+              color={pet.gender === 'Male' ? '#3B82F6' : '#EC4899'} 
+            />
+            <Text style={styles.detailText}>{pet.gender}</Text>
           </View>
-
-          {pet.special_needs && pet.special_needs.length > 0 && (
-            <View style={styles.specialNeeds}>
-              <Ionicons name="medical" size={16} color="#F59E0B" />
-              <Text style={styles.specialNeedsText}>Special needs</Text>
-            </View>
-          )}
-
-          {pet.description && (
-            <Text style={styles.petDescription} numberOfLines={2}>
-              {pet.description}
+          
+          <View style={styles.detailItem}>
+            <Ionicons name="fitness-outline" size={16} color="#666" />
+            <Text style={styles.detailText}>{pet.weight} kg</Text>
+          </View>
+        </View>
+        
+        <View style={styles.petFooter}>
+          <Text style={styles.lastCheckup}>
+            Last checkup: {new Date(pet.lastCheckup).toLocaleDateString()}
+          </Text>
+          <View style={[styles.statusBadge, pet.isActive && styles.statusActive]}>
+            <Text style={[styles.statusText, pet.isActive && styles.statusActiveText]}>
+              {pet.isActive ? 'Active' : 'Inactive'}
             </Text>
-          )}
+          </View>
         </View>
-      </TouchableOpacity>
-    );
-  };
+      </View>
+    </TouchableOpacity>
+  );
 
-  // Loading state
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#333" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>My Pets</Text>
-          <View style={styles.headerRight} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FF5A5F" />
-          <Text style={styles.loadingText}>Loading your pets...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // Reload pets when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadPets();
+    }, [])
+  );
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Pets</Text>
-        <TouchableOpacity
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('AddPet')}
           style={styles.addButton}
-          onPress={() => navigation.navigate('AddPet', { mode: 'add' })}
         >
           <Ionicons name="add" size={24} color="#FF5A5F" />
         </TouchableOpacity>
@@ -247,67 +197,71 @@ const MyPetsScreen = ({ navigation }) => {
         style={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#FF5A5F']}
-            tintColor="#FF5A5F"
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Error State */}
-        {error && (
-          <View style={styles.errorContainer}>
-            <Ionicons name="alert-circle" size={24} color="#FF5A5F" />
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={() => loadPets()}>
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
+        {/* Stats Section */}
+        <View style={styles.statsSection}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{pets.length}</Text>
+            <Text style={styles.statLabel}>Total Pets</Text>
           </View>
-        )}
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{pets.filter(p => p.isActive).length}</Text>
+            <Text style={styles.statLabel}>Active</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>
+              {pets.filter(p => {
+                const lastCheckup = new Date(p.lastCheckup);
+                const sixMonthsAgo = new Date();
+                sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+                return lastCheckup < sixMonthsAgo;
+              }).length}
+            </Text>
+            <Text style={styles.statLabel}>Need Checkup</Text>
+          </View>
+        </View>
 
         {/* Pets List */}
-        {pets.length > 0 ? (
-          <View style={styles.petsContainer}>
-            {pets.map(renderPetCard)}
-          </View>
-        ) : !error && (
-          /* Empty State */
-          <View style={styles.emptyState}>
-            <Ionicons name="paw" size={64} color="#CCC" />
-            <Text style={styles.emptyTitle}>No pets yet</Text>
-            <Text style={styles.emptyText}>
-              Add your first pet to start booking care services
-            </Text>
-            <TouchableOpacity
-              style={styles.addFirstPetButton}
-              onPress={() => navigation.navigate('AddPet', { mode: 'add' })}
-            >
-              <Text style={styles.addFirstPetButtonText}>Add Your First Pet</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Pet Care Tips */}
-        {pets.length > 0 && (
-          <View style={styles.tipsContainer}>
-            <Text style={styles.tipsTitle}>Pet Care Tips</Text>
-            <View style={styles.tipCard}>
-              <Ionicons name="medical" size={20} color="#10B981" />
-              <Text style={styles.tipText}>
-                Keep vaccination records up to date for the best care service experience
-              </Text>
+        <View style={styles.petsSection}>
+          <Text style={styles.sectionTitle}>Your Pets</Text>
+          
+          {loading && pets.length === 0 ? (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading your pets...</Text>
             </View>
-            <View style={styles.tipCard}>
-              <Ionicons name="camera" size={20} color="#3B82F6" />
-              <Text style={styles.tipText}>
-                Add photos to help caregivers recognize your pet easily
+          ) : pets.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="paw-outline" size={64} color="#DDD" />
+              <Text style={styles.emptyTitle}>No pets yet</Text>
+              <Text style={styles.emptyMessage}>
+                Add your first pet to start using PetBnB services
               </Text>
+              <TouchableOpacity
+                style={styles.addFirstPetButton}
+                onPress={() => navigation.navigate('AddPet')}
+              >
+                <Ionicons name="add" size={20} color="white" />
+                <Text style={styles.addFirstPetText}>Add Your First Pet</Text>
+              </TouchableOpacity>
             </View>
-          </View>
-        )}
+          ) : (
+            <>
+              {pets.map(renderPetCard)}
+              
+              {/* Add More Pets */}
+              <TouchableOpacity
+                style={styles.addMoreButton}
+                onPress={() => navigation.navigate('AddPet')}
+              >
+                <Ionicons name="add-circle-outline" size={24} color="#FF5A5F" />
+                <Text style={styles.addMoreText}>Add Another Pet</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
 
-        {/* Bottom Padding */}
         <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>
@@ -317,28 +271,26 @@ const MyPetsScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F9F9F9',
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
     backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: '#F0F0F0',
   },
   backButton: {
     padding: 8,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#333',
-  },
-  headerRight: {
-    width: 40,
   },
   addButton: {
     padding: 8,
@@ -346,85 +298,59 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  loadingContainer: {
+  statsSection: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    gap: 12,
+  },
+  statCard: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 50,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
-  },
-  errorContainer: {
-    backgroundColor: '#FFF5F5',
-    marginHorizontal: 20,
-    marginTop: 20,
+    backgroundColor: 'white',
     padding: 16,
     borderRadius: 12,
-    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FED7D7',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  errorText: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: 14,
-    color: '#C53030',
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FF5A5F',
+    marginBottom: 4,
   },
-  retryButton: {
-    backgroundColor: '#FF5A5F',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  retryButtonText: {
-    color: 'white',
+  statLabel: {
     fontSize: 12,
-    fontWeight: '600',
+    color: '#666',
+    textAlign: 'center',
   },
-  petsContainer: {
-    padding: 20,
+  petsSection: {
+    paddingHorizontal: 20,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
   },
   petCard: {
     backgroundColor: 'white',
     borderRadius: 16,
     marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowRadius: 8,
+    elevation: 3,
     overflow: 'hidden',
-  },
-  petImageContainer: {
-    position: 'relative',
-    height: 200,
   },
   petImage: {
     width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  petImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#F3F4F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  editPetButton: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: 200,
+    backgroundColor: '#F0F0F0',
   },
   petInfo: {
     padding: 16,
@@ -433,13 +359,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   petName: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
-    flex: 1,
   },
   deleteButton: {
     padding: 4,
@@ -447,109 +372,104 @@ const styles = StyleSheet.create({
   petBreed: {
     fontSize: 16,
     color: '#666',
-    marginBottom: 4,
-  },
-  petAge: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
-  },
-  petWeight: {
-    fontSize: 14,
-    color: '#666',
     marginBottom: 12,
   },
-  petTags: {
+  petDetails: {
     flexDirection: 'row',
-    gap: 8,
+    justifyContent: 'space-between',
     marginBottom: 12,
   },
-  tag: {
+  detailItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  detailText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  petFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  lastCheckup: {
+    fontSize: 12,
+    color: '#999',
+  },
+  statusBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
+    backgroundColor: '#F3F4F6',
   },
-  tagText: {
+  statusActive: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusText: {
     fontSize: 12,
-    color: 'white',
+    color: '#6B7280',
     fontWeight: '500',
-    textTransform: 'capitalize',
   },
-  specialNeeds: {
-    flexDirection: 'row',
+  statusActiveText: {
+    color: '#16A34A',
+  },
+  loadingContainer: {
+    padding: 40,
     alignItems: 'center',
-    marginBottom: 8,
   },
-  specialNeedsText: {
-    fontSize: 14,
-    color: '#F59E0B',
-    marginLeft: 6,
-    fontWeight: '500',
-  },
-  petDescription: {
-    fontSize: 14,
+  loadingText: {
+    fontSize: 16,
     color: '#666',
-    lineHeight: 20,
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 80,
-    paddingHorizontal: 40,
+    padding: 40,
   },
   emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '600',
     color: '#333',
-    marginTop: 20,
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 8,
   },
-  emptyText: {
+  emptyMessage: {
     fontSize: 16,
     color: '#666',
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
+    marginBottom: 24,
   },
   addFirstPetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FF5A5F',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     borderRadius: 25,
+    gap: 8,
   },
-  addFirstPetButtonText: {
+  addFirstPetText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
   },
-  tipsContainer: {
-    margin: 20,
-    marginTop: 0,
-  },
-  tipsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 16,
-  },
-  tipCard: {
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 12,
+  addMoreButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    justifyContent: 'center',
+    backgroundColor: 'white',
+    borderWidth: 2,
+    borderColor: '#FF5A5F',
+    borderStyle: 'dashed',
+    paddingVertical: 20,
+    borderRadius: 16,
+    marginBottom: 16,
+    gap: 8,
   },
-  tipText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 12,
-    lineHeight: 20,
+  addMoreText: {
+    fontSize: 16,
+    color: '#FF5A5F',
+    fontWeight: '600',
   },
   bottomPadding: {
     height: 40,

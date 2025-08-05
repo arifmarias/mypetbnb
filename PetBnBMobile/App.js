@@ -10,6 +10,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EmailVerificationScreen from './src/screens/EmailVerificationScreen';
 import { initializeAPI } from './src/services/api';
+
 // Context
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ToastProvider } from './src/context/ToastContext';
@@ -38,10 +39,13 @@ import MyServicesScreen from './src/screens/MyServicesScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import HelpSupportScreen from './src/screens/HelpSupportScreen';
 import AboutScreen from './src/screens/AboutScreen';
-import MyPetsScreen from './src/screens/MyPetsScreen';
+
 // NEW: Booking Management Screens
 import BookingDetailsScreen from './src/screens/BookingDetailsScreen';
 import BookingManagementScreen from './src/screens/BookingManagementScreen';
+
+// NEW: Pet Management Screens
+import MyPetsScreen from './src/screens/MyPetsScreen';
 
 // Suppress specific warnings
 LogBox.ignoreLogs([
@@ -119,29 +123,6 @@ function AuthNavigator() {
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
-      <Stack.Screen 
-                name="MyPets" 
-                component={MyPetsScreen}
-                options={{
-                  headerShown: true,
-                  title: 'My Pets'
-                }}
-              />
-              <Stack.Screen 
-                name="AddPet" 
-                component={AddPetScreen}
-                options={{
-                  headerShown: false,
-                  presentation: 'modal'
-                }}
-              />
-              <Stack.Screen 
-                name="PetDetails" 
-                component={PetDetailsScreen}
-                options={{
-                  headerShown: false
-                }}
-              />
     </Stack.Navigator>
   );
 }
@@ -191,10 +172,34 @@ function AppNavigator() {
             <>
               {/* Main App Screens */}
               <Stack.Screen name="MainTabs" component={TabNavigator} />
-              <Stack.Screen name="MyPets" component={MyPetsScreen} options={{ headerShown: true, title: 'My Pets' }} />
-              <Stack.Screen name="AddPet" component={AddPetScreen} options={{ headerShown: false, presentation: 'modal' }} />
-              <Stack.Screen name="PetDetails" component={PetDetailsScreen} options={{ headerShown: false }} />
-              {/* Modal/Detail Screens */}
+              
+              {/* Pet Management Screens */}
+              <Stack.Screen 
+                name="MyPets" 
+                component={MyPetsScreen}
+                options={{
+                  headerShown: true,
+                  title: 'My Pets'
+                }}
+              />
+              <Stack.Screen 
+                name="AddPet" 
+                component={AddPetScreen}
+                options={{
+                  headerShown: true,
+                  title: 'Add Pet'
+                }}
+              />
+              <Stack.Screen 
+                name="PetDetails" 
+                component={PetDetailsScreen}
+                options={{
+                  headerShown: true,
+                  title: 'Pet Details'
+                }}
+              />
+              
+              {/* Booking Management Screens */}
               <Stack.Screen 
                 name="BookingDetails" 
                 component={BookingDetailsScreen}
@@ -220,14 +225,8 @@ function AppNavigator() {
                   title: 'Create Booking'
                 }}
               />
-              <Stack.Screen 
-                name="PetDetails" 
-                component={PetDetailsScreen}
-                options={{
-                  headerShown: true,
-                  title: 'Pet Details'
-                }}
-              />
+              
+              {/* Service Management Screens */}
               <Stack.Screen 
                 name="ServiceDetails" 
                 component={ServiceDetailsScreen}
@@ -237,13 +236,15 @@ function AppNavigator() {
                 }}
               />
               <Stack.Screen 
-                name="AddPet" 
-                component={AddPetScreen}
+                name="MyServices" 
+                component={MyServicesScreen}
                 options={{
                   headerShown: true,
-                  title: 'Add Pet'
+                  title: 'My Services'
                 }}
               />
+              
+              {/* Communication Screens */}
               <Stack.Screen 
                 name="Chat" 
                 component={ChatScreen}
@@ -252,6 +253,8 @@ function AppNavigator() {
                   title: 'Chat'
                 }}
               />
+              
+              {/* Profile Management Screens */}
               <Stack.Screen 
                 name="EditProfile" 
                 component={EditProfileScreen}
@@ -266,14 +269,6 @@ function AppNavigator() {
                 options={{
                   headerShown: true,
                   title: 'Payment Methods'
-                }}
-              />
-              <Stack.Screen 
-                name="MyServices" 
-                component={MyServicesScreen}
-                options={{
-                  headerShown: true,
-                  title: 'My Services'
                 }}
               />
               <Stack.Screen 

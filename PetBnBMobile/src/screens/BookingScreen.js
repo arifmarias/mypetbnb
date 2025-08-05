@@ -6,320 +6,684 @@ import {
   ScrollView,
   TouchableOpacity,
   SafeAreaView,
-  Image,
-  Alert,
-  Modal,
   TextInput,
+  Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { bookingsAPI } from '../services/api';
 
 const BookingScreen = ({ route, navigation }) => {
-  const { service } = route.params || {};
+  const { serviceId, service } = route.params || {};
   const { user } = useAuth();
   const toast = useToast();
-  
-  const [selectedPets, setSelectedPets] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedTime, setSelectedTime] = useState(null);
-  const [specialRequirements, setSpecialRequirements] = useState('');
+
+  const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  
-  // Mock user pets - in real app, fetch from API
-  const [userPets, setUserPets] = useState([
+  const [userPets, setUserPets] = useState([]);
+
+  const [bookingData, setBookingData] = useState({
+    selectedPets: [],
+    serviceDate: null,
+    serviceTime: null,
+    duration: service?.duration || '',
+    specialRequirements: '',
+    emergencyContact: {
+      name: '',
+      phone: '',
+      relationship: '',
+    },
+    paymentMethod: '',
+    agreedToTerms: false,
+  });
+
+  // Mock user pets - same as in MyPetsScreen
+  const mockPets = [
     {
       id: '1',
       name: 'Buddy',
       breed: 'Golden Retriever',
       age: 3,
+      weight: 25,
+      gender: 'Male',
       image: 'https://images.unsplash.com/photo-1552053831-71594a27632d?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80',
     },
     {
       id: '2',
       name: 'Luna',
-      breed: 'Persian Cat',
+      breed: 'Siamese Cat',
       age: 2,
-      image: 'https://images.unsplash.com/photo-1574158622682-e40e69881006?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80',
+      weight: 4.5,
+      gender: 'Female',
+      image: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80',
     },
-  ]);
-  
-  const availableDates = [
-    { date: '2024-12-29', day: 'Fri', available: true },
-    { date: '2024-12-30', day: 'Sat', available: true },
-    { date: '2024-12-31', day: 'Sun', available: false },
-    { date: '2025-01-01', day: 'Mon', available: true },
-    { date: '2025-01-02', day: 'Tue', available: true },
-  ];
-  
-  const availableTimes = [
-    '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
-    '1:00 PM', '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM'
+    {
+      id: '3',
+      name: 'Charlie',
+      breed: 'French Bulldog',
+      age: 1,
+      weight: 12,
+      gender: 'Male',
+      image: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?ixlib=rb-4.0.3&auto=format&fit=crop&w=150&q=80',
+    },
   ];
 
-  const togglePetSelection = (petId) => {
-    setSelectedPets(prev => 
-      prev.includes(petId) 
-        ? prev.filter(id => id !== petId)
-        : [...prev, petId]
-    );
+  // Available time slots
+  const timeSlots = [
+    '08:00', '09:00', '10:00', '11:00', '12:00',
+    '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'
+  ];
+
+  // Payment methods
+  const paymentMethods = [
+    { id: 'credit_card', name: 'Credit/Debit Card', icon: 'card-outline' },
+    { id: 'grabpay', name: 'GrabPay', icon: 'wallet-outline' },
+    { id: 'boost', name: 'Boost', icon: 'phone-portrait-outline' },
+    { id: 'tng', name: 'Touch \'n Go eWallet', icon: 'phone-portrait-outline' },
+  ];
+
+  useEffect(() => {
+    loadUserPets();
+  }, []);
+
+  const loadUserPets = async () => {
+    try {
+      // Mock API call
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setUserPets(mockPets);
+    } catch (error) {
+      console.error('Error loading pets:', error);
+      toast.error('Failed to load pets');
+    }
+  };
+
+  const handlePetSelection = (petId) => {
+    setBookingData(prev => ({
+      ...prev,
+      selectedPets: prev.selectedPets.includes(petId)
+        ? prev.selectedPets.filter(id => id !== petId)
+        : [...prev.selectedPets, petId]
+    }));
+  };
+
+  const handleDateSelection = (date) => {
+    setBookingData(prev => ({ ...prev, serviceDate: date }));
+  };
+
+  const handleTimeSelection = (time) => {
+    setBookingData(prev => ({ ...prev, serviceTime: time }));
   };
 
   const calculateTotal = () => {
-    if (!service || selectedPets.length === 0) return 0;
-    const basePrice = service.service?.price || 50;
-    const petMultiplier = selectedPets.length;
-    const subtotal = basePrice * petMultiplier;
-    const serviceFee = subtotal * 0.1; // 10% service fee
-    return subtotal + serviceFee;
+    let basePrice = service?.price || 0;
+    let total = basePrice;
+    
+    // Additional pet charges (50% for each additional pet)
+    if (bookingData.selectedPets.length > 1) {
+      total += basePrice * 0.5 * (bookingData.selectedPets.length - 1);
+    }
+    
+    // Platform fee (10%)
+    const platformFee = total * 0.1;
+    
+    return {
+      basePrice,
+      additionalPetFee: bookingData.selectedPets.length > 1 ? basePrice * 0.5 * (bookingData.selectedPets.length - 1) : 0,
+      platformFee,
+      total: total + platformFee
+    };
   };
 
-  const handleBooking = async () => {
-    if (selectedPets.length === 0) {
-      toast.error('Please select at least one pet');
-      return;
+  const validateStep = (step) => {
+    switch (step) {
+      case 1:
+        if (bookingData.selectedPets.length === 0) {
+          toast.error('Please select at least one pet');
+          return false;
+        }
+        return true;
+      case 2:
+        if (!bookingData.serviceDate || !bookingData.serviceTime) {
+          toast.error('Please select date and time');
+          return false;
+        }
+        return true;
+      case 3:
+        if (!bookingData.emergencyContact.name || !bookingData.emergencyContact.phone) {
+          toast.error('Please provide emergency contact information');
+          return false;
+        }
+        return true;
+      case 4:
+        if (!bookingData.paymentMethod) {
+          toast.error('Please select a payment method');
+          return false;
+        }
+        if (!bookingData.agreedToTerms) {
+          toast.error('Please agree to terms and conditions');
+          return false;
+        }
+        return true;
+      default:
+        return true;
     }
-    
-    if (!selectedDate || !selectedTime) {
-      toast.error('Please select date and time');
-      return;
+  };
+
+  const handleNext = () => {
+    if (validateStep(currentStep)) {
+      if (currentStep < 5) {
+        setCurrentStep(currentStep + 1);
+      }
     }
+  };
+
+  const handlePrevious = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleBookingSubmit = async () => {
+    if (!validateStep(4)) return;
 
     setLoading(true);
-    
     try {
-      const bookingData = {
-        service_id: service?.id,
-        caregiver_id: service?.caregiver?.id,
-        pet_ids: selectedPets,
-        booking_date: selectedDate,
-        booking_time: selectedTime,
-        special_requirements: specialRequirements,
-        total_amount: calculateTotal(),
-        status: 'pending'
-      };
-
-      // In real app, make API call
-      // const response = await bookingsAPI.createBooking(bookingData);
-      
-      // Mock success
+      // Mock API call for booking creation
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      toast.success('Booking request sent successfully!');
-      navigation.navigate('MainTabs', { screen: 'Dashboard' });
+      const bookingId = 'BK' + Date.now();
+      
+      setCurrentStep(5); // Move to success step
       
     } catch (error) {
-      console.error('Booking failed:', error);
+      console.error('Booking error:', error);
       toast.error('Failed to create booking. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short', 
-      month: 'short', 
-      day: 'numeric' 
-    });
+  const getNextAvailableDates = () => {
+    const dates = [];
+    const today = new Date();
+    
+    for (let i = 1; i <= 14; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      dates.push(date);
+    }
+    
+    return dates;
   };
 
-  if (!service) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Service not found</Text>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
+  const renderStepIndicator = () => (
+    <View style={styles.stepIndicator}>
+      {[1, 2, 3, 4, 5].map((step) => (
+        <View key={step} style={styles.stepContainer}>
+          <View style={[
+            styles.stepCircle,
+            currentStep >= step && styles.stepCircleActive,
+            currentStep > step && styles.stepCircleCompleted
+          ]}>
+            {currentStep > step ? (
+              <Ionicons name="checkmark" size={16} color="white" />
+            ) : (
+              <Text style={[
+                styles.stepNumber,
+                currentStep >= step && styles.stepNumberActive
+              ]}>
+                {step}
+              </Text>
+            )}
+          </View>
+          {step < 5 && (
+            <View style={[
+              styles.stepLine,
+              currentStep > step && styles.stepLineCompleted
+            ]} />
+          )}
+        </View>
+      ))}
+    </View>
+  );
+
+  const renderStep1 = () => (
+    <View style={styles.stepContent}>
+      <Text style={styles.stepTitle}>Select Your Pets</Text>
+      <Text style={styles.stepDescription}>
+        Choose which pets need this service
+      </Text>
+
+      {userPets.length === 0 ? (
+        <View style={styles.noPetsContainer}>
+          <Ionicons name="paw-outline" size={64} color="#DDD" />
+          <Text style={styles.noPetsTitle}>No pets found</Text>
+          <Text style={styles.noPetsMessage}>
+            Please add your pets first before booking services
+          </Text>
+          <TouchableOpacity
+            style={styles.addPetButton}
+            onPress={() => navigation.navigate('AddPet')}
           >
-            <Text style={styles.backButtonText}>Go Back</Text>
+            <Text style={styles.addPetButtonText}>Add Pet</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      ) : (
+        <ScrollView style={styles.petsContainer} showsVerticalScrollIndicator={false}>
+          {userPets.map((pet) => (
+            <TouchableOpacity
+              key={pet.id}
+              style={[
+                styles.petCard,
+                bookingData.selectedPets.includes(pet.id) && styles.petCardSelected
+              ]}
+              onPress={() => handlePetSelection(pet.id)}
+            >
+              <Image source={{ uri: pet.image }} style={styles.petImage} />
+              <View style={styles.petInfo}>
+                <Text style={styles.petName}>{pet.name}</Text>
+                <Text style={styles.petDetails}>
+                  {pet.breed} • {pet.age} years • {pet.weight} kg
+                </Text>
+              </View>
+              <View style={[
+                styles.checkbox,
+                bookingData.selectedPets.includes(pet.id) && styles.checkboxSelected
+              ]}>
+                {bookingData.selectedPets.includes(pet.id) && (
+                  <Ionicons name="checkmark" size={16} color="white" />
+                )}
+              </View>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+
+      {bookingData.selectedPets.length > 1 && (
+        <View style={styles.additionalPetNotice}>
+          <Ionicons name="information-circle" size={20} color="#F59E0B" />
+          <Text style={styles.additionalPetText}>
+            Additional pets: +50% charge per pet
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+
+  const renderStep2 = () => (
+    <View style={styles.stepContent}>
+      <Text style={styles.stepTitle}>Select Date & Time</Text>
+      <Text style={styles.stepDescription}>
+        Choose when you need the service
+      </Text>
+
+      {/* Date Selection */}
+      <View style={styles.sectionContainer}>
+        <Text style={styles.sectionLabel}>Select Date</Text>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.dateScroller}
+        >
+          {getNextAvailableDates().map((date, index) => {
+            const isSelected = bookingData.serviceDate?.toDateString() === date.toDateString();
+            const isToday = date.toDateString() === new Date().toDateString();
+            
+            return (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.dateCard,
+                  isSelected && styles.dateCardSelected
+                ]}
+                onPress={() => handleDateSelection(date)}
+              >
+                <Text style={[
+                  styles.dayName,
+                  isSelected && styles.dayNameSelected
+                ]}>
+                  {isToday ? 'Today' : date.toLocaleDateString('en', { weekday: 'short' })}
+                </Text>
+                <Text style={[
+                  styles.dateNumber,
+                  isSelected && styles.dateNumberSelected
+                ]}>
+                  {date.getDate()}
+                </Text>
+                <Text style={[
+                  styles.monthName,
+                  isSelected && styles.monthNameSelected
+                ]}>
+                  {date.toLocaleDateString('en', { month: 'short' })}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Time Selection */}
+      <View style={styles.sectionContainer}>
+        <Text style={styles.sectionLabel}>Select Time</Text>
+        <View style={styles.timeGrid}>
+          {timeSlots.map((time) => {
+            const isSelected = bookingData.serviceTime === time;
+            
+            return (
+              <TouchableOpacity
+                key={time}
+                style={[
+                  styles.timeSlot,
+                  isSelected && styles.timeSlotSelected
+                ]}
+                onPress={() => handleTimeSelection(time)}
+              >
+                <Text style={[
+                  styles.timeText,
+                  isSelected && styles.timeTextSelected
+                ]}>
+                  {time}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Duration Info */}
+      <View style={styles.durationInfo}>
+        <Ionicons name="time-outline" size={20} color="#666" />
+        <Text style={styles.durationText}>
+          Service Duration: {service?.duration || 'Not specified'}
+        </Text>
+      </View>
+    </View>
+  );
+
+  const renderStep3 = () => (
+    <View style={styles.stepContent}>
+      <Text style={styles.stepTitle}>Additional Information</Text>
+      <Text style={styles.stepDescription}>
+        Help us provide the best care for your pets
+      </Text>
+
+      {/* Special Requirements */}
+      <View style={styles.inputSection}>
+        <Text style={styles.inputLabel}>Special Requirements or Instructions</Text>
+        <TextInput
+          style={styles.textArea}
+          placeholder="Any special care instructions, feeding requirements, medications, behavioral notes, etc."
+          value={bookingData.specialRequirements}
+          onChangeText={(text) => setBookingData(prev => ({ ...prev, specialRequirements: text }))}
+          multiline
+          numberOfLines={6}
+          textAlignVertical="top"
+        />
+      </View>
+
+      {/* Emergency Contact */}
+      <View style={styles.inputSection}>
+        <Text style={styles.inputLabel}>Emergency Contact Information</Text>
+        
+        <View style={styles.inputContainer}>
+          <Text style={styles.fieldLabel}>Contact Name *</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Emergency contact name"
+            value={bookingData.emergencyContact.name}
+            onChangeText={(text) => setBookingData(prev => ({
+              ...prev,
+              emergencyContact: { ...prev.emergencyContact, name: text }
+            }))}
+          />
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.fieldLabel}>Phone Number *</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="+60 12 345 6789"
+            value={bookingData.emergencyContact.phone}
+            onChangeText={(text) => setBookingData(prev => ({
+              ...prev,
+              emergencyContact: { ...prev.emergencyContact, phone: text }
+            }))}
+            keyboardType="phone-pad"
+          />
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.fieldLabel}>Relationship</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g., Spouse, Parent, Friend"
+            value={bookingData.emergencyContact.relationship}
+            onChangeText={(text) => setBookingData(prev => ({
+              ...prev,
+              emergencyContact: { ...prev.emergencyContact, relationship: text }
+            }))}
+          />
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderStep4 = () => {
+    const pricing = calculateTotal();
+    
+    return (
+      <View style={styles.stepContent}>
+        <Text style={styles.stepTitle}>Payment & Confirmation</Text>
+        <Text style={styles.stepDescription}>
+          Review your booking and select payment method
+        </Text>
+
+        {/* Booking Summary */}
+        <View style={styles.summarySection}>
+          <Text style={styles.summaryTitle}>Booking Summary</Text>
+          
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Service:</Text>
+            <Text style={styles.summaryValue}>{service?.title}</Text>
+          </View>
+          
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Caregiver:</Text>
+            <Text style={styles.summaryValue}>{service?.caregiver?.name}</Text>
+          </View>
+          
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Date & Time:</Text>
+            <Text style={styles.summaryValue}>
+              {bookingData.serviceDate?.toLocaleDateString()} at {bookingData.serviceTime}
+            </Text>
+          </View>
+          
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryLabel}>Pets:</Text>
+            <Text style={styles.summaryValue}>
+              {bookingData.selectedPets.map(petId => {
+                const pet = userPets.find(p => p.id === petId);
+                return pet?.name;
+              }).join(', ')}
+            </Text>
+          </View>
+        </View>
+
+        {/* Price Breakdown */}
+        <View style={styles.pricingSection}>
+          <Text style={styles.summaryTitle}>Price Breakdown</Text>
+          
+          <View style={styles.priceItem}>
+            <Text style={styles.priceLabel}>Base Service Fee</Text>
+            <Text style={styles.priceValue}>{service?.currency} {pricing.basePrice}</Text>
+          </View>
+          
+          {pricing.additionalPetFee > 0 && (
+            <View style={styles.priceItem}>
+              <Text style={styles.priceLabel}>Additional Pets ({bookingData.selectedPets.length - 1})</Text>
+              <Text style={styles.priceValue}>{service?.currency} {pricing.additionalPetFee}</Text>
+            </View>
+          )}
+          
+          <View style={styles.priceItem}>
+            <Text style={styles.priceLabel}>Platform Fee (10%)</Text>
+            <Text style={styles.priceValue}>{service?.currency} {pricing.platformFee.toFixed(2)}</Text>
+          </View>
+          
+          <View style={styles.totalItem}>
+            <Text style={styles.totalLabel}>Total Amount</Text>
+            <Text style={styles.totalValue}>{service?.currency} {pricing.total.toFixed(2)}</Text>
+          </View>
+        </View>
+
+        {/* Payment Methods */}
+        <View style={styles.paymentSection}>
+          <Text style={styles.summaryTitle}>Payment Method</Text>
+          
+          {paymentMethods.map((method) => (
+            <TouchableOpacity
+              key={method.id}
+              style={[
+                styles.paymentMethod,
+                bookingData.paymentMethod === method.id && styles.paymentMethodSelected
+              ]}
+              onPress={() => setBookingData(prev => ({ ...prev, paymentMethod: method.id }))}
+            >
+              <Ionicons name={method.icon} size={24} color="#666" />
+              <Text style={styles.paymentMethodText}>{method.name}</Text>
+              <View style={[
+                styles.radio,
+                bookingData.paymentMethod === method.id && styles.radioSelected
+              ]}>
+                {bookingData.paymentMethod === method.id && (
+                  <View style={styles.radioDot} />
+                )}
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Terms and Conditions */}
+        <TouchableOpacity
+          style={styles.termsContainer}
+          onPress={() => setBookingData(prev => ({ ...prev, agreedToTerms: !prev.agreedToTerms }))}
+        >
+          <View style={[
+            styles.checkbox,
+            bookingData.agreedToTerms && styles.checkboxSelected
+          ]}>
+            {bookingData.agreedToTerms && (
+              <Ionicons name="checkmark" size={16} color="white" />
+            )}
+          </View>
+          <Text style={styles.termsText}>
+            I agree to the{' '}
+            <Text style={styles.termsLink}>Terms and Conditions</Text>
+            {' '}and{' '}
+            <Text style={styles.termsLink}>Cancellation Policy</Text>
+          </Text>
+        </TouchableOpacity>
+      </View>
     );
-  }
+  };
+
+  const renderStep5 = () => (
+    <View style={styles.stepContent}>
+      <View style={styles.successContainer}>
+        <Ionicons name="checkmark-circle" size={80} color="#10B981" />
+        <Text style={styles.successTitle}>Booking Submitted!</Text>
+        <Text style={styles.successMessage}>
+          Your booking request has been sent to the caregiver. You'll receive a confirmation once it's approved.
+        </Text>
+        
+        <View style={styles.nextStepsContainer}>
+          <Text style={styles.nextStepsTitle}>What happens next?</Text>
+          <View style={styles.nextStep}>
+            <Ionicons name="mail-outline" size={20} color="#666" />
+            <Text style={styles.nextStepText}>You'll receive a confirmation email</Text>
+          </View>
+          <View style={styles.nextStep}>
+            <Ionicons name="chatbubble-outline" size={20} color="#666" />
+            <Text style={styles.nextStepText}>Caregiver will review and respond within 24 hours</Text>
+          </View>
+          <View style={styles.nextStep}>
+            <Ionicons name="notifications-outline" size={20} color="#666" />
+            <Text style={styles.nextStepText}>You'll get push notifications for updates</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.doneButton}
+          onPress={() => navigation.navigate('MainTabs', { screen: 'Dashboard' })}
+        >
+          <Text style={styles.doneButtonText}>Go to Dashboard</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderCurrentStep = () => {
+    switch (currentStep) {
+      case 1: return renderStep1();
+      case 2: return renderStep2();
+      case 3: return renderStep3();
+      case 4: return renderStep4();
+      case 5: return renderStep5();
+      default: return renderStep1();
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity 
-          style={styles.headerBackButton}
           onPress={() => navigation.goBack()}
+          style={styles.backButton}
         >
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Book Service</Text>
-        <View style={{ width: 24 }} />
+        <View style={styles.placeholder} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Service Info */}
-        <View style={styles.serviceInfo}>
-          <Image 
-            source={{ uri: service.caregiver?.image }} 
-            style={styles.caregiverImage} 
-          />
-          <View style={styles.serviceDetails}>
-            <Text style={styles.serviceTitle}>{service.service?.title}</Text>
-            <Text style={styles.caregiverName}>by {service.caregiver?.name}</Text>
-            <View style={styles.priceContainer}>
-              <Text style={styles.price}>${service.service?.price}</Text>
-              <Text style={styles.priceUnit}>/day</Text>
-            </View>
-          </View>
-        </View>
+      {/* Step Indicator */}
+      {currentStep < 5 && renderStepIndicator()}
 
-        {/* Select Pets */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Select Pets</Text>
-          <View style={styles.petsContainer}>
-            {userPets.map((pet) => (
-              <TouchableOpacity 
-                key={pet.id}
-                style={[
-                  styles.petCard, 
-                  selectedPets.includes(pet.id) && styles.petCardSelected
-                ]}
-                onPress={() => togglePetSelection(pet.id)}
-              >
-                <Image source={{ uri: pet.image }} style={styles.petImage} />
-                <View style={styles.petInfo}>
-                  <Text style={styles.petName}>{pet.name}</Text>
-                  <Text style={styles.petBreed}>{pet.breed}, {pet.age} years</Text>
-                </View>
-                <View style={[
-                  styles.checkbox,
-                  selectedPets.includes(pet.id) && styles.checkboxSelected
-                ]}>
-                  {selectedPets.includes(pet.id) && (
-                    <Ionicons name="checkmark" size={16} color="white" />
-                  )}
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Select Date */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Select Date</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.datesContainer}>
-              {availableDates.map((dateItem) => (
-                <TouchableOpacity 
-                  key={dateItem.date}
-                  style={[
-                    styles.dateCard,
-                    !dateItem.available && styles.dateCardDisabled,
-                    selectedDate === dateItem.date && styles.dateCardSelected
-                  ]}
-                  onPress={() => dateItem.available && setSelectedDate(dateItem.date)}
-                  disabled={!dateItem.available}
-                >
-                  <Text style={[
-                    styles.dateDay,
-                    !dateItem.available && styles.dateTextDisabled,
-                    selectedDate === dateItem.date && styles.dateTextSelected
-                  ]}>
-                    {dateItem.day}
-                  </Text>
-                  <Text style={[
-                    styles.dateNumber,
-                    !dateItem.available && styles.dateTextDisabled,
-                    selectedDate === dateItem.date && styles.dateTextSelected
-                  ]}>
-                    {new Date(dateItem.date).getDate()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-        </View>
-
-        {/* Select Time */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Select Time</Text>
-          <View style={styles.timesContainer}>
-            {availableTimes.map((time) => (
-              <TouchableOpacity 
-                key={time}
-                style={[
-                  styles.timeCard,
-                  selectedTime === time && styles.timeCardSelected
-                ]}
-                onPress={() => setSelectedTime(time)}
-              >
-                <Text style={[
-                  styles.timeText,
-                  selectedTime === time && styles.timeTextSelected
-                ]}>
-                  {time}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Special Requirements */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Special Requirements</Text>
-          <TextInput
-            style={styles.textInput}
-            placeholder="Any special instructions for your pet..."
-            value={specialRequirements}
-            onChangeText={setSpecialRequirements}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-        </View>
-
-        {/* Booking Summary */}
-        <View style={styles.summarySection}>
-          <Text style={styles.sectionTitle}>Booking Summary</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Service</Text>
-            <Text style={styles.summaryValue}>{service.service?.title}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Pets</Text>
-            <Text style={styles.summaryValue}>
-              {selectedPets.length} pet{selectedPets.length !== 1 ? 's' : ''}
-            </Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Date & Time</Text>
-            <Text style={styles.summaryValue}>
-              {selectedDate ? formatDate(selectedDate) : 'Not selected'} {selectedTime || ''}
-            </Text>
-          </View>
-          <View style={[styles.summaryRow, styles.summaryTotal]}>
-            <Text style={styles.summaryTotalLabel}>Total</Text>
-            <Text style={styles.summaryTotalValue}>${calculateTotal().toFixed(2)}</Text>
-          </View>
-        </View>
+      {/* Content */}
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {renderCurrentStep()}
       </ScrollView>
 
-      {/* Book Button */}
-      <View style={styles.bookingButton}>
-        <TouchableOpacity 
-          style={[
-            styles.bookButton,
-            (!selectedDate || !selectedTime || selectedPets.length === 0 || loading) && styles.bookButtonDisabled
-          ]}
-          onPress={handleBooking}
-          disabled={!selectedDate || !selectedTime || selectedPets.length === 0 || loading}
-        >
-          <Text style={styles.bookButtonText}>
-            {loading ? 'Booking...' : `Book for $${calculateTotal().toFixed(2)}`}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* Bottom Navigation */}
+      {currentStep < 5 && (
+        <View style={styles.bottomNavigation}>
+          {currentStep > 1 && (
+            <TouchableOpacity
+              style={styles.previousButton}
+              onPress={handlePrevious}
+            >
+              <Text style={styles.previousButtonText}>Previous</Text>
+            </TouchableOpacity>
+          )}
+          
+          <TouchableOpacity
+            style={[
+              styles.nextButton,
+              currentStep === 1 && styles.nextButtonFull,
+              loading && styles.nextButtonDisabled
+            ]}
+            onPress={currentStep === 4 ? handleBookingSubmit : handleNext}
+            disabled={loading}
+          >
+            <Text style={styles.nextButtonText}>
+              {loading ? 'Processing...' : currentStep === 4 ? 'Confirm Booking' : 'Next'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -340,7 +704,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
-  headerBackButton: {
+  backButton: {
     padding: 8,
   },
   headerTitle: {
@@ -348,90 +712,136 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
-  serviceInfo: {
+  placeholder: {
+    width: 40,
+  },
+  stepIndicator: {
     flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
     backgroundColor: 'white',
-    padding: 20,
-    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
-  caregiverImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    marginRight: 16,
+  stepContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  serviceDetails: {
+  stepCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E5E5E5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepCircleActive: {
+    backgroundColor: '#FF5A5F',
+  },
+  stepCircleCompleted: {
+    backgroundColor: '#10B981',
+  },
+  stepNumber: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#999',
+  },
+  stepNumberActive: {
+    color: 'white',
+  },
+  stepLine: {
+    width: 40,
+    height: 2,
+    backgroundColor: '#E5E5E5',
+    marginHorizontal: 8,
+  },
+  stepLineCompleted: {
+    backgroundColor: '#10B981',
+  },
+  content: {
     flex: 1,
   },
-  serviceTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+  stepContent: {
+    padding: 20,
   },
-  caregiverName: {
-    fontSize: 14,
-    color: '#666',
+  stepTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
     marginBottom: 8,
   },
-  priceContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-  },
-  price: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FF5A5F',
-  },
-  priceUnit: {
-    fontSize: 14,
+  stepDescription: {
+    fontSize: 16,
     color: '#666',
-    marginLeft: 4,
+    marginBottom: 24,
   },
-  section: {
-    backgroundColor: 'white',
-    marginBottom: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+  noPetsContainer: {
+    alignItems: 'center',
+    padding: 40,
   },
-  sectionTitle: {
-    fontSize: 18,
+  noPetsTitle: {
+    fontSize: 20,
     fontWeight: '600',
     color: '#333',
-    marginBottom: 16,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  noPetsMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  addPetButton: {
+    backgroundColor: '#FF5A5F',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  addPetButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
   },
   petsContainer: {
-    gap: 12,
+    maxHeight: 400,
   },
   petCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'white',
+    borderRadius: 16,
     padding: 16,
+    marginBottom: 12,
     borderWidth: 2,
-    borderColor: '#E5E5E5',
-    borderRadius: 12,
-    backgroundColor: '#F9F9F9',
+    borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   petCardSelected: {
     borderColor: '#FF5A5F',
-    backgroundColor: '#FFF5F5',
+    backgroundColor: '#FF5A5F10',
   },
   petImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     marginRight: 16,
   },
   petInfo: {
     flex: 1,
   },
   petName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: '#333',
     marginBottom: 4,
   },
-  petBreed: {
+  petDetails: {
     fontSize: 14,
     color: '#666',
   },
@@ -440,7 +850,7 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#E5E5E5',
+    borderColor: '#DDD',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -448,159 +858,424 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF5A5F',
     borderColor: '#FF5A5F',
   },
-  datesContainer: {
+  additionalPetNotice: {
     flexDirection: 'row',
-    gap: 12,
-    paddingRight: 20,
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+    gap: 8,
+  },
+  additionalPetText: {
+    fontSize: 14,
+    color: '#92400E',
+    flex: 1,
+  },
+  sectionContainer: {
+    marginBottom: 24,
+  },
+  sectionLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  dateScroller: {
+    flexDirection: 'row',
   },
   dateCard: {
     alignItems: 'center',
-    padding: 16,
-    borderWidth: 2,
-    borderColor: '#E5E5E5',
+    backgroundColor: 'white',
     borderRadius: 12,
-    backgroundColor: '#F9F9F9',
-    minWidth: 70,
+    padding: 16,
+    marginRight: 12,
+    minWidth: 80,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   dateCardSelected: {
     borderColor: '#FF5A5F',
-    backgroundColor: '#FF5A5F',
+    backgroundColor: '#FF5A5F10',
   },
-  dateCardDisabled: {
-    opacity: 0.5,
-  },
-  dateDay: {
+  dayName: {
     fontSize: 12,
     color: '#666',
     marginBottom: 4,
   },
-  dateNumber: {
-    fontSize: 18,
+  dayNameSelected: {
+    color: '#FF5A5F',
     fontWeight: '600',
+  },
+  dateNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
     color: '#333',
+    marginBottom: 4,
   },
-  dateTextSelected: {
-    color: 'white',
+  dateNumberSelected: {
+    color: '#FF5A5F',
   },
-  dateTextDisabled: {
-    color: '#999',
+  monthName: {
+    fontSize: 12,
+    color: '#666',
   },
-  timesContainer: {
+  monthNameSelected: {
+    color: '#FF5A5F',
+    fontWeight: '600',
+  },
+  timeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
   },
-  timeCard: {
-    paddingHorizontal: 16,
+  timeSlot: {
+    paddingHorizontal: 20,
     paddingVertical: 12,
+    backgroundColor: 'white',
+    borderRadius: 25,
     borderWidth: 2,
-    borderColor: '#E5E5E5',
-    borderRadius: 20,
-    backgroundColor: '#F9F9F9',
+    borderColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  timeCardSelected: {
+  timeSlotSelected: {
     borderColor: '#FF5A5F',
     backgroundColor: '#FF5A5F',
   },
   timeText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#333',
     fontWeight: '500',
   },
   timeTextSelected: {
     color: 'white',
+    fontWeight: '600',
   },
-  textInput: {
-    borderWidth: 1,
-    borderColor: '#E5E5E5',
+  durationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    padding: 16,
+    borderRadius: 12,
+    gap: 8,
+  },
+  durationText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  inputSection: {
+    marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  textArea: {
+    backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
     fontSize: 16,
     color: '#333',
-    backgroundColor: '#F9F9F9',
-    minHeight: 100,
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  fieldLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
   },
   summarySection: {
     backgroundColor: 'white',
-    marginBottom: 100,
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  summaryRow: {
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  summaryItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
+    alignItems: 'flex-start',
+    marginBottom: 12,
   },
   summaryLabel: {
     fontSize: 16,
     color: '#666',
+    flex: 1,
   },
   summaryValue: {
     fontSize: 16,
     color: '#333',
     fontWeight: '500',
+    flex: 2,
+    textAlign: 'right',
   },
-  summaryTotal: {
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
-    marginTop: 12,
+  pricingSection: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  priceItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  priceLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  priceValue: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  totalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
     paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
   },
-  summaryTotalLabel: {
+  totalLabel: {
+    fontSize: 18,
+    color: '#333',
+    fontWeight: '600',
+  },
+  totalValue: {
+    fontSize: 18,
+    color: '#FF5A5F',
+    fontWeight: 'bold',
+  },
+  paymentSection: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  paymentMethod: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: '#F9F9F9',
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  paymentMethodSelected: {
+    borderColor: '#FF5A5F',
+    backgroundColor: '#FF5A5F10',
+  },
+  paymentMethodText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+    flex: 1,
+    marginLeft: 12,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#DDD',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioSelected: {
+    borderColor: '#FF5A5F',
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FF5A5F',
+  },
+  termsContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 20,
+    gap: 12,
+  },
+  termsText: {
+    fontSize: 14,
+    color: '#666',
+    flex: 1,
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: '#FF5A5F',
+    fontWeight: '500',
+  },
+  successContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#10B981',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  successMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
+  nextStepsContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 32,
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  nextStepsTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
+    marginBottom: 16,
   },
-  summaryTotalValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FF5A5F',
-  },
-  bookingButton: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'white',
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5E5',
-  },
-  bookButton: {
-    backgroundColor: '#FF5A5F',
-    borderRadius: 25,
-    paddingVertical: 16,
+  nextStep: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
   },
-  bookButtonDisabled: {
-    opacity: 0.5,
-  },
-  bookButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  errorText: {
-    fontSize: 18,
+  nextStepText: {
+    fontSize: 14,
     color: '#666',
-    marginBottom: 20,
+    flex: 1,
   },
-  backButton: {
+  doneButton: {
     backgroundColor: '#FF5A5F',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 20,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 25,
+    shadowColor: '#FF5A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  backButtonText: {
+  doneButtonText: {
     color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  bottomNavigation: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  previousButton: {
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 25,
+    flex: 1,
+    marginRight: 12,
+  },
+  previousButtonText: {
+    color: '#666',
+    fontSize: 16,
     fontWeight: '600',
+    textAlign: 'center',
+  },
+  nextButton: {
+    backgroundColor: '#FF5A5F',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: 25,
+    flex: 1,
+    marginLeft: 12,
+    shadowColor: '#FF5A5F',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  nextButtonFull: {
+    marginLeft: 0,
+  },
+  nextButtonDisabled: {
+    opacity: 0.6,
+  },
+  nextButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });
 
