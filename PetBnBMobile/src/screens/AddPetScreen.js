@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,430 +8,551 @@ import {
   SafeAreaView,
   TextInput,
   Alert,
+  ActivityIndicator,
+  Image,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import ImagePicker from '../components/ImagePicker';
 import { petsAPI } from '../services/api';
+import * as ImagePicker from 'expo-image-picker';
 
-const AddPetScreen = ({ navigation }) => {
+const AddPetScreen = ({ navigation, route }) => {
   const { user } = useAuth();
   const toast = useToast();
-  
+  const { petId, mode = 'add' } = route.params || {};
+  const isEditMode = mode === 'edit' && petId;
+
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Form state
   const [formData, setFormData] = useState({
     name: '',
+    species: 'Dog',
     breed: '',
-    age: '',
+    gender: 'male',
+    birth_date: '',
     weight: '',
-    gender: '',
-    color: '',
-    image: null,
     description: '',
-    medical_info: {
-      vaccinations: '',
-      medications: '',
-      allergies: '',
-      conditions: '',
-      veterinarian_name: '',
-      veterinarian_phone: '',
-    },
-    behavior_info: {
-      personality: '',
-      good_with: '',
-      training: '',
-      special_needs: '',
-    },
-    care_instructions: {
-      feeding: '',
-      exercise: '',
-      grooming: '',
-      emergency_contact_name: '',
-      emergency_contact_phone: '',
-    },
+    special_needs: [],
+    vaccination_records: [],
+    images: [],
+    medical_info: '',
+    behavioral_notes: '',
+    emergency_contact: '',
   });
-  
-  const [loading, setLoading] = useState(false);
 
-  const handleInputChange = (field, value, section = null) => {
-    if (section) {
-      setFormData(prev => ({
-        ...prev,
-        [section]: {
-          ...prev[section],
-          [field]: value
-        }
-      }));
-    } else {
-      setFormData(prev => ({ ...prev, [field]: value }));
-    }
-  };
+  const [errors, setErrors] = useState({});
 
-  const handleImageSelected = (imageUri) => {
-    setFormData(prev => ({ ...prev, image: imageUri }));
-  };
+  // Pet species options
+  const speciesOptions = ['Dog', 'Cat', 'Bird', 'Rabbit', 'Hamster', 'Fish', 'Other'];
 
-  const validateForm = () => {
-    if (!formData.name.trim()) {
-      toast.error('Pet name is required');
-      return false;
-    }
-    if (!formData.breed.trim()) {
-      toast.error('Pet breed is required');
-      return false;
-    }
-    if (!formData.age || isNaN(formData.age)) {
-      toast.error('Valid age is required');
-      return false;
-    }
-    if (!formData.gender) {
-      toast.error('Gender is required');
-      return false;
-    }
-    return true;
-  };
+  // Common dog breeds for quick selection
+  const dogBreeds = [
+    'Golden Retriever', 'Labrador', 'German Shepherd', 'Bulldog', 'Poodle',
+    'Siberian Husky', 'Shih Tzu', 'Chihuahua', 'Beagle', 'Mixed Breed'
+  ];
 
-  const handleSubmit = async () => {
-    if (!validateForm()) return;
+  // Common cat breeds
+  const catBreeds = [
+    'Persian', 'Siamese', 'Maine Coon', 'British Shorthair', 'Ragdoll',
+    'Russian Blue', 'Bengal', 'Abyssinian', 'Scottish Fold', 'Mixed Breed'
+  ];
 
-    setLoading(true);
-    
+  // Load pet data if editing
+  useEffect(() => {
+    if (isEditMode) {
+      loadPetData();
+    }
+  }, [isEditMode, petId]);
+
+  const loadPetData = async () => {
     try {
-      const petData = {
-        ...formData,
-        owner_id: user?.id,
-        age: parseInt(formData.age),
-        weight: formData.weight ? parseFloat(formData.weight) : null,
-      };
-
-      // In real app, make API call
-      // const response = await petsAPI.createPet(petData);
+      setLoading(true);
+      const response = await petsAPI.getPet(petId);
+      const petData = response.data;
       
-      // Mock success
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      toast.success('Pet added successfully!');
-      navigation.goBack();
-      
+      setFormData({
+        name: petData.name || '',
+        species: petData.species || 'Dog',
+        breed: petData.breed || '',
+        gender: petData.gender || 'male',
+        birth_date: petData.birth_date ? petData.birth_date.split('T')[0] : '',
+        weight: petData.weight ? petData.weight.toString() : '',
+        description: petData.description || '',
+        special_needs: petData.special_needs || [],
+        vaccination_records: petData.vaccination_records || [],
+        images: petData.images || [],
+        medical_info: petData.medical_info || '',
+        behavioral_notes: petData.behavioral_notes || '',
+        emergency_contact: petData.emergency_contact || '',
+      });
     } catch (error) {
-      console.error('Failed to add pet:', error);
-      toast.error('Failed to add pet. Please try again.');
+      console.error('Load pet error:', error);
+      toast.error('Failed to load pet data');
+      navigation.goBack();
     } finally {
       setLoading(false);
     }
   };
 
+  const updateFormData = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors(prev => ({ ...prev, [field]: null }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData.name.trim()) {
+      newErrors.name = 'Pet name is required';
+    }
+
+    if (!formData.breed.trim()) {
+      newErrors.breed = 'Breed is required';
+    }
+
+    if (formData.weight && (isNaN(formData.weight) || parseFloat(formData.weight) <= 0)) {
+      newErrors.weight = 'Please enter a valid weight';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleImagePick = async () => {
+    try {
+      // Request permission
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        Alert.alert('Permission required', 'Permission to access camera roll is required!');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled) {
+        setUploadingImage(true);
+        
+        // In a real app, you would upload to your image service
+        // For now, we'll just add the local URI
+        const newImages = [...formData.images, result.assets[0].uri];
+        updateFormData('images', newImages);
+        
+        setUploadingImage(false);
+        toast.success('Image added successfully');
+      }
+    } catch (error) {
+      console.error('Image pick error:', error);
+      setUploadingImage(false);
+      toast.error('Failed to add image');
+    }
+  };
+
+  const removeImage = (index) => {
+    const newImages = formData.images.filter((_, i) => i !== index);
+    updateFormData('images', newImages);
+  };
+
+  const addSpecialNeed = () => {
+    Alert.prompt(
+      'Add Special Need',
+      'Enter a special need or medical condition:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Add',
+          onPress: (text) => {
+            if (text && text.trim()) {
+              const newSpecialNeeds = [...formData.special_needs, text.trim()];
+              updateFormData('special_needs', newSpecialNeeds);
+            }
+          },
+        },
+      ],
+      'plain-text'
+    );
+  };
+
+  const removeSpecialNeed = (index) => {
+    const newSpecialNeeds = formData.special_needs.filter((_, i) => i !== index);
+    updateFormData('special_needs', newSpecialNeeds);
+  };
+
+  const addVaccinationRecord = () => {
+    Alert.alert(
+      'Add Vaccination Record',
+      'Choose an option:',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Add Basic Vaccination',
+          onPress: () => {
+            const newRecord = {
+              vaccine: 'Basic Vaccination',
+              date: new Date().toISOString().split('T')[0],
+              veterinarian: '',
+              notes: ''
+            };
+            const newRecords = [...formData.vaccination_records, newRecord];
+            updateFormData('vaccination_records', newRecords);
+          },
+        },
+      ]
+    );
+  };
+
+  const removeVaccinationRecord = (index) => {
+    const newRecords = formData.vaccination_records.filter((_, i) => i !== index);
+    updateFormData('vaccination_records', newRecords);
+  };
+
+  const handleSave = async () => {
+    if (!validateForm()) {
+      toast.error('Please fix the errors before saving');
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const petData = {
+        ...formData,
+        owner_id: user.id,
+        weight: formData.weight ? parseFloat(formData.weight) : null,
+        birth_date: formData.birth_date || null,
+      };
+
+      if (isEditMode) {
+        await petsAPI.updatePet(petId, petData);
+        toast.success('Pet updated successfully');
+      } else {
+        await petsAPI.createPet(petData);
+        toast.success('Pet added successfully');
+      }
+
+      navigation.goBack();
+    } catch (error) {
+      console.error('Save pet error:', error);
+      toast.error(isEditMode ? 'Failed to update pet' : 'Failed to add pet');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF5A5F" />
+          <Text style={styles.loadingText}>Loading pet data...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add Pet</Text>
-        <View style={{ width: 24 }} />
+        <Text style={styles.headerTitle}>
+          {isEditMode ? 'Edit Pet' : 'Add Pet'}
+        </Text>
+        <TouchableOpacity
+          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={saving}
+        >
+          {saving ? (
+            <ActivityIndicator size="small" color="white" />
+          ) : (
+            <Text style={styles.saveButtonText}>Save</Text>
+          )}
+        </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Pet Photo */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Pet Photo</Text>
-          <ImagePicker
-            onImageSelected={handleImageSelected}
-            currentImage={formData.image}
-            style={styles.imagePicker}
-          />
-        </View>
-
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Basic Information */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Basic Information</Text>
           
-          <View style={styles.inputContainer}>
+          <View style={styles.formGroup}>
             <Text style={styles.label}>Pet Name *</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Enter pet name"
+              style={[styles.input, errors.name && styles.inputError]}
               value={formData.name}
-              onChangeText={(value) => handleInputChange('name', value)}
+              onChangeText={(text) => updateFormData('name', text)}
+              placeholder="Enter your pet's name"
+              placeholderTextColor="#999"
             />
+            {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
           </View>
 
-          <View style={styles.inputContainer}>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Species</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.optionsScroll}>
+              {speciesOptions.map((species) => (
+                <TouchableOpacity
+                  key={species}
+                  style={[
+                    styles.optionButton,
+                    formData.species === species && styles.optionButtonActive
+                  ]}
+                  onPress={() => updateFormData('species', species)}
+                >
+                  <Text style={[
+                    styles.optionText,
+                    formData.species === species && styles.optionTextActive
+                  ]}>
+                    {species}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          <View style={styles.formGroup}>
             <Text style={styles.label}>Breed *</Text>
             <TextInput
-              style={styles.input}
-              placeholder="Enter breed"
+              style={[styles.input, errors.breed && styles.inputError]}
               value={formData.breed}
-              onChangeText={(value) => handleInputChange('breed', value)}
+              onChangeText={(text) => updateFormData('breed', text)}
+              placeholder="Enter breed"
+              placeholderTextColor="#999"
             />
+            {errors.breed && <Text style={styles.errorText}>{errors.breed}</Text>}
+            
+            {/* Quick breed selection */}
+            {(formData.species === 'Dog' || formData.species === 'Cat') && (
+              <View style={styles.quickBreeds}>
+                <Text style={styles.quickBreedsLabel}>Quick select:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {(formData.species === 'Dog' ? dogBreeds : catBreeds).map((breed) => (
+                    <TouchableOpacity
+                      key={breed}
+                      style={styles.quickBreedButton}
+                      onPress={() => updateFormData('breed', breed)}
+                    >
+                      <Text style={styles.quickBreedText}>{breed}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
           </View>
 
-          <View style={styles.row}>
-            <View style={[styles.inputContainer, { flex: 1, marginRight: 8 }]}>
-              <Text style={styles.label}>Age (years) *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Age"
-                value={formData.age}
-                onChangeText={(value) => handleInputChange('age', value)}
-                keyboardType="numeric"
-              />
+          <View style={styles.formRow}>
+            <View style={styles.formGroupHalf}>
+              <Text style={styles.label}>Gender</Text>
+              <View style={styles.genderSelector}>
+                <TouchableOpacity
+                  style={[
+                    styles.genderButton,
+                    formData.gender === 'male' && styles.genderButtonActive
+                  ]}
+                  onPress={() => updateFormData('gender', 'male')}
+                >
+                  <Text style={[
+                    styles.genderText,
+                    formData.gender === 'male' && styles.genderTextActive
+                  ]}>
+                    Male
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.genderButton,
+                    formData.gender === 'female' && styles.genderButtonActive
+                  ]}
+                  onPress={() => updateFormData('gender', 'female')}
+                >
+                  <Text style={[
+                    styles.genderText,
+                    formData.gender === 'female' && styles.genderTextActive
+                  ]}>
+                    Female
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
-            <View style={[styles.inputContainer, { flex: 1, marginLeft: 8 }]}>
+            <View style={styles.formGroupHalf}>
               <Text style={styles.label}>Weight (kg)</Text>
               <TextInput
-                style={styles.input}
-                placeholder="Weight"
+                style={[styles.input, errors.weight && styles.inputError]}
                 value={formData.weight}
-                onChangeText={(value) => handleInputChange('weight', value)}
-                keyboardType="numeric"
+                onChangeText={(text) => updateFormData('weight', text)}
+                placeholder="0.0"
+                placeholderTextColor="#999"
+                keyboardType="decimal-pad"
               />
+              {errors.weight && <Text style={styles.errorText}>{errors.weight}</Text>}
             </View>
           </View>
 
-          {/* Gender Selection */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Gender *</Text>
-            <View style={styles.genderContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.genderButton,
-                  formData.gender === 'Male' && styles.genderButtonSelected
-                ]}
-                onPress={() => handleInputChange('gender', 'Male')}
-              >
-                <Text style={[
-                  styles.genderButtonText,
-                  formData.gender === 'Male' && styles.genderButtonTextSelected
-                ]}>
-                  Male
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[
-                  styles.genderButton,
-                  formData.gender === 'Female' && styles.genderButtonSelected
-                ]}
-                onPress={() => handleInputChange('gender', 'Female')}
-              >
-                <Text style={[
-                  styles.genderButtonText,
-                  formData.gender === 'Female' && styles.genderButtonTextSelected
-                ]}>
-                  Female
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Color</Text>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Birth Date</Text>
             <TextInput
               style={styles.input}
-              placeholder="Pet color"
-              value={formData.color}
-              onChangeText={(value) => handleInputChange('color', value)}
+              value={formData.birth_date}
+              onChangeText={(text) => updateFormData('birth_date', text)}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#999"
             />
           </View>
 
-          <View style={styles.inputContainer}>
+          <View style={styles.formGroup}>
             <Text style={styles.label}>Description</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="Tell us about your pet's personality and habits..."
               value={formData.description}
-              onChangeText={(value) => handleInputChange('description', value)}
+              onChangeText={(text) => updateFormData('description', text)}
+              placeholder="Tell us about your pet's personality, likes, dislikes..."
+              placeholderTextColor="#999"
               multiline
               numberOfLines={4}
-              textAlignVertical="top"
             />
           </View>
+        </View>
+
+        {/* Photos */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Photos</Text>
+          
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photosScroll}>
+            {formData.images.map((image, index) => (
+              <View key={index} style={styles.photoContainer}>
+                <Image source={{ uri: image }} style={styles.photo} />
+                <TouchableOpacity
+                  style={styles.removePhotoButton}
+                  onPress={() => removeImage(index)}
+                >
+                  <Ionicons name="close" size={16} color="white" />
+                </TouchableOpacity>
+              </View>
+            ))}
+            
+            <TouchableOpacity
+              style={styles.addPhotoButton}
+              onPress={handleImagePick}
+              disabled={uploadingImage}
+            >
+              {uploadingImage ? (
+                <ActivityIndicator size="small" color="#FF5A5F" />
+              ) : (
+                <>
+                  <Ionicons name="camera" size={24} color="#FF5A5F" />
+                  <Text style={styles.addPhotoText}>Add Photo</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </ScrollView>
         </View>
 
         {/* Medical Information */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Medical Information</Text>
           
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Vaccinations</Text>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Medical Information</Text>
             <TextInput
-              style={styles.input}
-              placeholder="List current vaccinations"
-              value={formData.medical_info.vaccinations}
-              onChangeText={(value) => handleInputChange('vaccinations', value, 'medical_info')}
+              style={[styles.input, styles.textArea]}
+              value={formData.medical_info}
+              onChangeText={(text) => updateFormData('medical_info', text)}
+              placeholder="Any medical conditions, allergies, medications..."
+              placeholderTextColor="#999"
+              multiline
+              numberOfLines={3}
             />
           </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Current Medications</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="List any medications"
-              value={formData.medical_info.medications}
-              onChangeText={(value) => handleInputChange('medications', value, 'medical_info')}
-            />
+          <View style={styles.formGroup}>
+            <View style={styles.listHeader}>
+              <Text style={styles.label}>Special Needs</Text>
+              <TouchableOpacity style={styles.addButton} onPress={addSpecialNeed}>
+                <Ionicons name="add" size={20} color="#FF5A5F" />
+                <Text style={styles.addButtonText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {formData.special_needs.map((need, index) => (
+              <View key={index} style={styles.listItem}>
+                <Text style={styles.listItemText}>{need}</Text>
+                <TouchableOpacity onPress={() => removeSpecialNeed(index)}>
+                  <Ionicons name="remove-circle" size={20} color="#FF5A5F" />
+                </TouchableOpacity>
+              </View>
+            ))}
           </View>
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Allergies</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="List any known allergies"
-              value={formData.medical_info.allergies}
-              onChangeText={(value) => handleInputChange('allergies', value, 'medical_info')}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Veterinarian Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Your vet's name"
-              value={formData.medical_info.veterinarian_name}
-              onChangeText={(value) => handleInputChange('veterinarian_name', value, 'medical_info')}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Veterinarian Phone</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Vet's phone number"
-              value={formData.medical_info.veterinarian_phone}
-              onChangeText={(value) => handleInputChange('veterinarian_phone', value, 'medical_info')}
-              keyboardType="phone-pad"
-            />
+          <View style={styles.formGroup}>
+            <View style={styles.listHeader}>
+              <Text style={styles.label}>Vaccination Records</Text>
+              <TouchableOpacity style={styles.addButton} onPress={addVaccinationRecord}>
+                <Ionicons name="add" size={20} color="#FF5A5F" />
+                <Text style={styles.addButtonText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+            
+            {formData.vaccination_records.map((record, index) => (
+              <View key={index} style={styles.listItem}>
+                <View style={styles.vaccinationInfo}>
+                  <Text style={styles.listItemText}>{record.vaccine}</Text>
+                  <Text style={styles.listItemSubtext}>{record.date}</Text>
+                </View>
+                <TouchableOpacity onPress={() => removeVaccinationRecord(index)}>
+                  <Ionicons name="remove-circle" size={20} color="#FF5A5F" />
+                </TouchableOpacity>
+              </View>
+            ))}
           </View>
         </View>
 
-        {/* Behavior & Personality */}
+        {/* Behavioral Information */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Behavior & Personality</Text>
+          <Text style={styles.sectionTitle}>Behavioral Information</Text>
           
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Personality Traits</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., Friendly, Energetic, Shy"
-              value={formData.behavior_info.personality}
-              onChangeText={(value) => handleInputChange('personality', value, 'behavior_info')}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Good With</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., Dogs, Cats, Children"
-              value={formData.behavior_info.good_with}
-              onChangeText={(value) => handleInputChange('good_with', value, 'behavior_info')}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Training Level</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., House trained, Basic commands"
-              value={formData.behavior_info.training}
-              onChangeText={(value) => handleInputChange('training', value, 'behavior_info')}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Special Needs</Text>
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Behavioral Notes</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="Any special care requirements..."
-              value={formData.behavior_info.special_needs}
-              onChangeText={(value) => handleInputChange('special_needs', value, 'behavior_info')}
+              value={formData.behavioral_notes}
+              onChangeText={(text) => updateFormData('behavioral_notes', text)}
+              placeholder="How does your pet behave around strangers, other pets, children..."
+              placeholderTextColor="#999"
               multiline
-              numberOfLines={3}
-              textAlignVertical="top"
+              numberOfLines={4}
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.label}>Emergency Contact</Text>
+            <TextInput
+              style={styles.input}
+              value={formData.emergency_contact}
+              onChangeText={(text) => updateFormData('emergency_contact', text)}
+              placeholder="Emergency contact name and phone number"
+              placeholderTextColor="#999"
             />
           </View>
         </View>
 
-        {/* Care Instructions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Care Instructions</Text>
-          
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Feeding Instructions</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Feeding schedule, food type, amount..."
-              value={formData.care_instructions.feeding}
-              onChangeText={(value) => handleInputChange('feeding', value, 'care_instructions')}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Exercise Requirements</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Exercise needs, walking schedule..."
-              value={formData.care_instructions.exercise}
-              onChangeText={(value) => handleInputChange('exercise', value, 'care_instructions')}
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Grooming Instructions</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Grooming requirements"
-              value={formData.care_instructions.grooming}
-              onChangeText={(value) => handleInputChange('grooming', value, 'care_instructions')}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Emergency Contact Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Emergency contact person"
-              value={formData.care_instructions.emergency_contact_name}
-              onChangeText={(value) => handleInputChange('emergency_contact_name', value, 'care_instructions')}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Emergency Contact Phone</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Emergency contact phone"
-              value={formData.care_instructions.emergency_contact_phone}
-              onChangeText={(value) => handleInputChange('emergency_contact_phone', value, 'care_instructions')}
-              keyboardType="phone-pad"
-            />
-          </View>
-        </View>
-
-        {/* Submit Button */}
-        <View style={styles.submitSection}>
-          <TouchableOpacity 
-            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            <Text style={styles.submitButtonText}>
-              {loading ? 'Adding Pet...' : 'Add Pet'}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        {/* Bottom Padding */}
+        <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -440,118 +561,258 @@ const AddPetScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9F9F9',
+    backgroundColor: '#F8F9FA',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingVertical: 16,
     backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: '#E5E7EB',
   },
   backButton: {
     padding: 8,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#333',
+  },
+  saveButton: {
+    backgroundColor: '#FF5A5F',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
+  saveButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  content: {
+    flex: 1,
   },
   section: {
     backgroundColor: 'white',
-    marginBottom: 12,
+    marginTop: 12,
     paddingHorizontal: 20,
     paddingVertical: 20,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#333',
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  imagePicker: {
-    alignSelf: 'center',
-    marginBottom: 16,
+  formGroup: {
+    marginBottom: 20,
   },
-  inputContainer: {
-    marginBottom: 16,
+  formRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  formGroupHalf: {
+    flex: 1,
   },
   label: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#333',
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#E5E5E5',
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 16,
     color: '#333',
-    backgroundColor: '#F9F9F9',
+    backgroundColor: 'white',
+  },
+  inputError: {
+    borderColor: '#FF5A5F',
   },
   textArea: {
-    minHeight: 80,
+    height: 80,
     textAlignVertical: 'top',
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  errorText: {
+    fontSize: 12,
+    color: '#FF5A5F',
+    marginTop: 4,
   },
-  genderContainer: {
-    flexDirection: 'row',
-    gap: 12,
+  optionsScroll: {
+    marginTop: 8,
   },
-  genderButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderWidth: 2,
-    borderColor: '#E5E5E5',
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: '#F9F9F9',
+  optionButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
+    marginRight: 8,
   },
-  genderButtonSelected: {
-    borderColor: '#FF5A5F',
-    backgroundColor: '#FFF5F5',
+  optionButtonActive: {
+    backgroundColor: '#FF5A5F',
   },
-  genderButtonText: {
-    fontSize: 16,
+  optionText: {
+    fontSize: 14,
     color: '#666',
     fontWeight: '500',
   },
-  genderButtonTextSelected: {
-    color: '#FF5A5F',
-  },
-  submitSection: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-  },
-  submitButton: {
-    backgroundColor: '#FF5A5F',
-    borderRadius: 25,
-    paddingVertical: 16,
-    alignItems: 'center',
-    shadowColor: '#FF5A5F',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  submitButtonDisabled: {
-    opacity: 0.6,
-  },
-  submitButtonText: {
+  optionTextActive: {
     color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+  },
+  quickBreeds: {
+    marginTop: 8,
+  },
+  quickBreedsLabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 8,
+  },
+  quickBreedButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F3F4F6',
+    marginRight: 6,
+  },
+  quickBreedText: {
+    fontSize: 12,
+    color: '#666',
+  },
+  genderSelector: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    padding: 2,
+  },
+  genderButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 6,
+  },
+  genderButtonActive: {
+    backgroundColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  genderText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  genderTextActive: {
+    color: '#333',
+  },
+  photosScroll: {
+    marginTop: 8,
+  },
+  photoContainer: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  photo: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+  },
+  removePhotoButton: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#FF5A5F',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPhotoButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9FAFB',
+  },
+  addPhotoText: {
+    fontSize: 12,
+    color: '#FF5A5F',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  listHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#FEF2F2',
+  },
+  addButtonText: {
+    fontSize: 14,
+    color: '#FF5A5F',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  listItemText: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  listItemSubtext: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  vaccinationInfo: {
+    flex: 1,
+  },
+  bottomPadding: {
+    height: 40,
   },
 });
 

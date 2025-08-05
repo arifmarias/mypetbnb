@@ -8,383 +8,327 @@ import {
   SafeAreaView,
   Image,
   Alert,
-  Modal,
-  TextInput,
+  ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { petsAPI } from '../services/api';
 
-const PetDetailsScreen = ({ route, navigation }) => {
-  const { petId } = route.params || {};
+const { width } = Dimensions.get('window');
+
+const PetDetailsScreen = ({ navigation, route }) => {
   const { user } = useAuth();
   const toast = useToast();
-  const [pet, setPet] = useState(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editModalVisible, setEditModalVisible] = useState(false);
+  const { petId } = route.params;
 
-  // Mock pet data - in real app, fetch from API
+  const [loading, setLoading] = useState(true);
+  const [pet, setPet] = useState(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
   useEffect(() => {
-    const mockPet = {
-      id: petId || '1',
-      name: 'Buddy',
-      breed: 'Golden Retriever',
-      age: 3,
-      weight: 25,
-      gender: 'Male',
-      color: 'Golden',
-      image: 'https://images.unsplash.com/photo-1552053831-71594a27632d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
-      description: 'Buddy is a friendly and energetic Golden Retriever who loves playing fetch and going on long walks. He is well-trained and gets along great with other dogs and children.',
-      medicalInfo: {
-        vaccinations: [
-          { name: 'Rabies', date: '2024-03-15', nextDue: '2025-03-15' },
-          { name: 'DHPP', date: '2024-01-20', nextDue: '2025-01-20' },
-          { name: 'Lyme Disease', date: '2024-02-10', nextDue: '2025-02-10' },
-        ],
-        medications: [
-          { name: 'Heartworm Prevention', frequency: 'Monthly', lastGiven: '2024-12-01' },
-        ],
-        allergies: ['Chicken', 'Grain'],
-        conditions: [],
-        veterinarian: {
-          name: 'Dr. Sarah Miller',
-          clinic: 'Happy Paws Veterinary Clinic',
-          phone: '+65 6123 4567',
-        },
-      },
-      behaviorInfo: {
-        personality: ['Friendly', 'Energetic', 'Loyal', 'Playful'],
-        goodWith: ['Dogs', 'Children', 'Cats'],
-        training: ['House Trained', 'Leash Trained', 'Basic Commands'],
-        issues: [],
-        specialNeeds: 'Needs regular exercise and mental stimulation',
-      },
-      careInstructions: {
-        feeding: 'Feed twice daily - morning and evening. 1.5 cups of high-quality dry food per meal.',
-        exercise: 'Requires at least 1 hour of exercise daily. Loves fetch and swimming.',
-        grooming: 'Brush weekly, bath monthly or as needed. Regular nail trims.',
-        medications: 'Heartworm prevention on the 1st of each month.',
-        emergency: {
-          contact: 'John Smith',
-          phone: '+65 9123 4567',
-          altContact: 'Mary Smith',
-          altPhone: '+65 9876 5432',
-        },
-      },
-      bookingHistory: [
-        {
-          id: '1',
-          service: 'Pet Boarding',
-          caregiver: 'Sarah Johnson',
-          date: '2024-11-15',
-          duration: '3 days',
-          status: 'completed',
-          rating: 5,
-        },
-        {
-          id: '2',
-          service: 'Dog Walking',
-          caregiver: 'Michael Chen',
-          date: '2024-10-20',
-          duration: '1 hour',
-          status: 'completed',
-          rating: 4,
-        },
-      ],
-    };
-    setPet(mockPet);
+    loadPetDetails();
   }, [petId]);
 
-  const handleEditPet = () => {
-    setEditModalVisible(true);
+  const loadPetDetails = async () => {
+    try {
+      setLoading(true);
+      const response = await petsAPI.getPet(petId);
+      setPet(response.data);
+    } catch (error) {
+      console.error('Load pet details error:', error);
+      toast.error('Failed to load pet details');
+      navigation.goBack();
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeletePet = () => {
+  const handleDelete = () => {
     Alert.alert(
       'Delete Pet',
-      `Are you sure you want to delete ${pet?.name}? This action cannot be undone.`,
+      `Are you sure you want to delete ${pet.name}? This action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            toast.success('Pet deleted successfully');
-            navigation.goBack();
+          onPress: async () => {
+            try {
+              await petsAPI.deletePet(petId);
+              toast.success('Pet deleted successfully');
+              navigation.goBack();
+            } catch (error) {
+              console.error('Delete pet error:', error);
+              toast.error('Failed to delete pet');
+            }
           },
         },
       ]
     );
   };
 
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'completed': return '#10B981';
-      case 'in_progress': return '#3B82F6';
-      case 'cancelled': return '#EF4444';
-      default: return '#6B7280';
+  const calculateAge = (birthDate) => {
+    if (!birthDate) return 'Unknown';
+    
+    const birth = new Date(birthDate);
+    const today = new Date();
+    const diffTime = Math.abs(today - birth);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays < 365) {
+      const months = Math.floor(diffDays / 30);
+      return months > 0 ? `${months} months old` : 'Less than 1 month old';
+    } else {
+      const years = Math.floor(diffDays / 365);
+      const months = Math.floor((diffDays % 365) / 30);
+      return months > 0 ? `${years} years, ${months} months old` : `${years} years old`;
     }
   };
 
-  if (!pet) {
+  const getVaccinationStatus = () => {
+    if (!pet.vaccination_records || pet.vaccination_records.length === 0) {
+      return { status: 'incomplete', text: 'No vaccination records', color: '#F59E0B' };
+    }
+    
+    const hasRecentVaccination = pet.vaccination_records.some(record => {
+      const vaccinationDate = new Date(record.date);
+      const monthsAgo = new Date();
+      monthsAgo.setMonth(monthsAgo.getMonth() - 12);
+      return vaccinationDate >= monthsAgo;
+    });
+    
+    return hasRecentVaccination 
+      ? { status: 'complete', text: 'Up to date', color: '#10B981' }
+      : { status: 'incomplete', text: 'Needs update', color: '#F59E0B' };
+  };
+
+  const renderImageGallery = () => {
+    if (!pet.images || pet.images.length === 0) {
+      return (
+        <View style={styles.imagePlaceholder}>
+          <Ionicons name="paw" size={60} color="#CCC" />
+          <Text style={styles.placeholderText}>No photos added</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.imageGallery}>
+        <ScrollView
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onScroll={(event) => {
+            const slideSize = event.nativeEvent.layoutMeasurement.width;
+            const index = Math.floor(event.nativeEvent.contentOffset.x / slideSize);
+            setCurrentImageIndex(index);
+          }}
+          scrollEventThrottle={10}
+        >
+          {pet.images.map((image, index) => (
+            <Image key={index} source={{ uri: image }} style={styles.petImage} />
+          ))}
+        </ScrollView>
+        
+        {pet.images.length > 1 && (
+          <View style={styles.imageIndicators}>
+            {pet.images.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.indicator,
+                  index === currentImageIndex && styles.activeIndicator
+                ]}
+              />
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderInfoSection = (title, children) => (
+    <View style={styles.infoSection}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {children}
+    </View>
+  );
+
+  const renderInfoItem = (label, value, icon) => (
+    <View style={styles.infoItem}>
+      {icon && <Ionicons name={icon} size={20} color="#666" style={styles.infoIcon} />}
+      <View style={styles.infoContent}>
+        <Text style={styles.infoLabel}>{label}</Text>
+        <Text style={styles.infoValue}>{value || 'Not specified'}</Text>
+      </View>
+    </View>
+  );
+
+  if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF5A5F" />
           <Text style={styles.loadingText}>Loading pet details...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
+  if (!pet) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Pet not found</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const vaccination = getVaccinationStatus();
+  const age = calculateAge(pet.birth_date);
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.headerButton}
-          onPress={() => navigation.goBack()}
-        >
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{pet.name}</Text>
-        <TouchableOpacity 
-          style={styles.headerButton}
-          onPress={handleEditPet}
+        <Text style={styles.headerTitle}>Pet Details</Text>
+        <TouchableOpacity
+          style={styles.editButton}
+          onPress={() => navigation.navigate('AddPet', { petId: pet.id, mode: 'edit' })}
         >
-          <Ionicons name="create-outline" size={24} color="#FF5A5F" />
+          <Ionicons name="create" size={24} color="#FF5A5F" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Pet Profile */}
-        <View style={styles.profileSection}>
-          <Image source={{ uri: pet.image }} style={styles.petImage} />
-          <View style={styles.petInfo}>
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Image Gallery */}
+        {renderImageGallery()}
+
+        {/* Pet Name and Basic Info */}
+        <View style={styles.petHeader}>
+          <View style={styles.petNameSection}>
             <Text style={styles.petName}>{pet.name}</Text>
-            <Text style={styles.petBreed}>{pet.breed}</Text>
-            <View style={styles.petDetails}>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Age</Text>
-                <Text style={styles.detailValue}>{pet.age} years</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Weight</Text>
-                <Text style={styles.detailValue}>{pet.weight} kg</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Gender</Text>
-                <Text style={styles.detailValue}>{pet.gender}</Text>
-              </View>
+            <Text style={styles.petBreed}>{pet.breed} • {pet.species}</Text>
+            <Text style={styles.petAge}>{age}</Text>
+          </View>
+          
+          <View style={styles.petTags}>
+            <View style={[styles.tag, { backgroundColor: pet.gender === 'male' ? '#3B82F6' : '#EC4899' }]}>
+              <Text style={styles.tagText}>{pet.gender}</Text>
+            </View>
+            <View style={[styles.tag, { backgroundColor: vaccination.color }]}>
+              <Text style={styles.tagText}>{vaccination.text}</Text>
             </View>
           </View>
         </View>
+
+        {/* Basic Information */}
+        {renderInfoSection('Basic Information', (
+          <>
+            {renderInfoItem('Species', pet.species, 'paw')}
+            {renderInfoItem('Breed', pet.breed, 'information-circle')}
+            {renderInfoItem('Gender', pet.gender, 'transgender')}
+            {renderInfoItem('Weight', pet.weight ? `${pet.weight} kg` : null, 'scale')}
+            {renderInfoItem('Birth Date', pet.birth_date ? new Date(pet.birth_date).toLocaleDateString() : null, 'calendar')}
+          </>
+        ))}
 
         {/* Description */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About {pet.name}</Text>
+        {pet.description && renderInfoSection('About ' + pet.name, (
           <Text style={styles.description}>{pet.description}</Text>
-        </View>
-
-        {/* Personality & Behavior */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personality & Behavior</Text>
-          <View style={styles.subsection}>
-            <Text style={styles.subsectionTitle}>Personality Traits</Text>
-            <View style={styles.tagsContainer}>
-              {pet.behaviorInfo.personality.map((trait, index) => (
-                <View key={index} style={styles.tag}>
-                  <Text style={styles.tagText}>{trait}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-          
-          <View style={styles.subsection}>
-            <Text style={styles.subsectionTitle}>Good With</Text>
-            <View style={styles.tagsContainer}>
-              {pet.behaviorInfo.goodWith.map((item, index) => (
-                <View key={index} style={[styles.tag, styles.tagGood]}>
-                  <Text style={[styles.tagText, styles.tagTextGood]}>{item}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          <View style={styles.subsection}>
-            <Text style={styles.subsectionTitle}>Training</Text>
-            <View style={styles.tagsContainer}>
-              {pet.behaviorInfo.training.map((training, index) => (
-                <View key={index} style={[styles.tag, styles.tagTraining]}>
-                  <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-                  <Text style={[styles.tagText, styles.tagTextTraining]}>{training}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {pet.behaviorInfo.specialNeeds && (
-            <View style={styles.subsection}>
-              <Text style={styles.subsectionTitle}>Special Needs</Text>
-              <Text style={styles.specialNeeds}>{pet.behaviorInfo.specialNeeds}</Text>
-            </View>
-          )}
-        </View>
+        ))}
 
         {/* Medical Information */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Medical Information</Text>
-          
-          <View style={styles.subsection}>
-            <Text style={styles.subsectionTitle}>Vaccinations</Text>
-            {pet.medicalInfo.vaccinations.map((vaccination, index) => (
-              <View key={index} style={styles.medicalItem}>
-                <View style={styles.medicalInfo}>
-                  <Text style={styles.medicalName}>{vaccination.name}</Text>
-                  <Text style={styles.medicalDate}>Last: {formatDate(vaccination.date)}</Text>
-                </View>
-                <Text style={styles.medicalNext}>Due: {formatDate(vaccination.nextDue)}</Text>
+        {(pet.medical_info || (pet.special_needs && pet.special_needs.length > 0)) && 
+         renderInfoSection('Medical Information', (
+          <>
+            {pet.medical_info && (
+              <View style={styles.medicalInfo}>
+                <Text style={styles.medicalTitle}>Medical Notes</Text>
+                <Text style={styles.medicalText}>{pet.medical_info}</Text>
               </View>
-            ))}
-          </View>
-
-          {pet.medicalInfo.allergies.length > 0 && (
-            <View style={styles.subsection}>
-              <Text style={styles.subsectionTitle}>Allergies</Text>
-              <View style={styles.tagsContainer}>
-                {pet.medicalInfo.allergies.map((allergy, index) => (
-                  <View key={index} style={[styles.tag, styles.tagWarning]}>
-                    <Ionicons name="warning" size={16} color="#EF4444" />
-                    <Text style={[styles.tagText, styles.tagTextWarning]}>{allergy}</Text>
+            )}
+            
+            {pet.special_needs && pet.special_needs.length > 0 && (
+              <View style={styles.specialNeeds}>
+                <Text style={styles.medicalTitle}>Special Needs</Text>
+                {pet.special_needs.map((need, index) => (
+                  <View key={index} style={styles.needItem}>
+                    <Ionicons name="medical" size={16} color="#F59E0B" />
+                    <Text style={styles.needText}>{need}</Text>
                   </View>
                 ))}
               </View>
-            </View>
-          )}
+            )}
+          </>
+        ))}
 
-          {pet.medicalInfo.medications.length > 0 && (
-            <View style={styles.subsection}>
-              <Text style={styles.subsectionTitle}>Current Medications</Text>
-              {pet.medicalInfo.medications.map((medication, index) => (
-                <View key={index} style={styles.medicationItem}>
-                  <View style={styles.medicationInfo}>
-                    <Text style={styles.medicationName}>{medication.name}</Text>
-                    <Text style={styles.medicationFreq}>{medication.frequency}</Text>
-                  </View>
-                  <Text style={styles.medicationLast}>Last: {formatDate(medication.lastGiven)}</Text>
+        {/* Vaccination Records */}
+        {pet.vaccination_records && pet.vaccination_records.length > 0 && 
+         renderInfoSection('Vaccination Records', (
+          <View style={styles.vaccinationRecords}>
+            {pet.vaccination_records.map((record, index) => (
+              <View key={index} style={styles.vaccinationItem}>
+                <View style={styles.vaccinationHeader}>
+                  <Text style={styles.vaccineName}>{record.vaccine}</Text>
+                  <Text style={styles.vaccinationDate}>
+                    {new Date(record.date).toLocaleDateString()}
+                  </Text>
                 </View>
-              ))}
-            </View>
-          )}
-
-          <View style={styles.subsection}>
-            <Text style={styles.subsectionTitle}>Veterinarian</Text>
-            <View style={styles.vetInfo}>
-              <View style={styles.vetDetails}>
-                <Text style={styles.vetName}>{pet.medicalInfo.veterinarian.name}</Text>
-                <Text style={styles.vetClinic}>{pet.medicalInfo.veterinarian.clinic}</Text>
+                {record.veterinarian && (
+                  <Text style={styles.veterinarian}>Vet: {record.veterinarian}</Text>
+                )}
+                {record.notes && (
+                  <Text style={styles.vaccinationNotes}>{record.notes}</Text>
+                )}
               </View>
-              <TouchableOpacity style={styles.callButton}>
-                <Ionicons name="call" size={20} color="#FF5A5F" />
-              </TouchableOpacity>
-            </View>
+            ))}
           </View>
-        </View>
+        ))}
 
-        {/* Care Instructions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Care Instructions</Text>
-          
-          <View style={styles.careItem}>
-            <Ionicons name="restaurant" size={20} color="#FF5A5F" />
-            <View style={styles.careContent}>
-              <Text style={styles.careTitle}>Feeding</Text>
-              <Text style={styles.careDescription}>{pet.careInstructions.feeding}</Text>
-            </View>
-          </View>
-
-          <View style={styles.careItem}>
-            <Ionicons name="fitness" size={20} color="#FF5A5F" />
-            <View style={styles.careContent}>
-              <Text style={styles.careTitle}>Exercise</Text>
-              <Text style={styles.careDescription}>{pet.careInstructions.exercise}</Text>
-            </View>
-          </View>
-
-          <View style={styles.careItem}>
-            <Ionicons name="sparkles" size={20} color="#FF5A5F" />
-            <View style={styles.careContent}>
-              <Text style={styles.careTitle}>Grooming</Text>
-              <Text style={styles.careDescription}>{pet.careInstructions.grooming}</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Emergency Contacts */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Emergency Contacts</Text>
-          <View style={styles.contactItem}>
-            <View style={styles.contactInfo}>
-              <Text style={styles.contactName}>{pet.careInstructions.emergency.contact}</Text>
-              <Text style={styles.contactPhone}>{pet.careInstructions.emergency.phone}</Text>
-            </View>
-            <TouchableOpacity style={styles.callButton}>
-              <Ionicons name="call" size={20} color="#FF5A5F" />
-            </TouchableOpacity>
-          </View>
-          {pet.careInstructions.emergency.altContact && (
-            <View style={styles.contactItem}>
-              <View style={styles.contactInfo}>
-                <Text style={styles.contactName}>{pet.careInstructions.emergency.altContact}</Text>
-                <Text style={styles.contactPhone}>{pet.careInstructions.emergency.altPhone}</Text>
+        {/* Behavioral Information */}
+        {(pet.behavioral_notes || pet.emergency_contact) && 
+         renderInfoSection('Behavioral & Emergency Information', (
+          <>
+            {pet.behavioral_notes && (
+              <View style={styles.behavioralInfo}>
+                <Text style={styles.medicalTitle}>Behavioral Notes</Text>
+                <Text style={styles.medicalText}>{pet.behavioral_notes}</Text>
               </View>
-              <TouchableOpacity style={styles.callButton}>
-                <Ionicons name="call" size={20} color="#FF5A5F" />
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
+            )}
+            
+            {pet.emergency_contact && 
+             renderInfoItem('Emergency Contact', pet.emergency_contact, 'call')}
+          </>
+        ))}
 
-        {/* Booking History */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Bookings</Text>
-          {pet.bookingHistory.map((booking) => (
-            <View key={booking.id} style={styles.bookingItem}>
-              <View style={styles.bookingInfo}>
-                <Text style={styles.bookingService}>{booking.service}</Text>
-                <Text style={styles.bookingCaregiver}>with {booking.caregiver}</Text>
-                <Text style={styles.bookingDate}>{formatDate(booking.date)} • {booking.duration}</Text>
-              </View>
-              <View style={styles.bookingStatus}>
-                <View style={[styles.statusDot, { backgroundColor: getStatusColor(booking.status) }]} />
-                <Text style={styles.statusText}>{booking.status}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        {/* Actions */}
-        <View style={styles.actionsSection}>
-          <TouchableOpacity style={styles.findCareButton}>
-            <Ionicons name="search" size={20} color="white" />
-            <Text style={styles.findCareButtonText}>Find Care for {pet.name}</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.deleteButton}
-            onPress={handleDeletePet}
+        {/* Action Buttons */}
+        <View style={styles.actionButtons}>
+          <TouchableOpacity
+            style={styles.editActionButton}
+            onPress={() => navigation.navigate('AddPet', { petId: pet.id, mode: 'edit' })}
           >
-            <Ionicons name="trash" size={20} color="#EF4444" />
-            <Text style={styles.deleteButtonText}>Delete Pet</Text>
+            <Ionicons name="create" size={20} color="white" />
+            <Text style={styles.actionButtonText}>Edit Pet</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.deleteActionButton}
+            onPress={handleDelete}
+          >
+            <Ionicons name="trash" size={20} color="white" />
+            <Text style={styles.actionButtonText}>Delete Pet</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Bottom Padding */}
+        <View style={styles.bottomPadding} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -393,341 +337,7 @@ const PetDetailsScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9F9F9',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  headerButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-  },
-  profileSection: {
-    flexDirection: 'row',
-    backgroundColor: 'white',
-    padding: 20,
-    marginBottom: 12,
-  },
-  petImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginRight: 20,
-  },
-  petInfo: {
-    flex: 1,
-  },
-  petName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  petBreed: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 16,
-  },
-  petDetails: {
-    flexDirection: 'row',
-    gap: 20,
-  },
-  detailItem: {
-    alignItems: 'center',
-  },
-  detailLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 4,
-  },
-  detailValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
-  section: {
-    backgroundColor: 'white',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 16,
-  },
-  description: {
-    fontSize: 16,
-    color: '#666',
-    lineHeight: 24,
-  },
-  subsection: {
-    marginBottom: 20,
-  },
-  subsectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  tag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F0F0F0',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 4,
-  },
-  tagGood: {
-    backgroundColor: '#10B98120',
-  },
-  tagTraining: {
-    backgroundColor: '#10B98120',
-  },
-  tagWarning: {
-    backgroundColor: '#EF444420',
-  },
-  tagText: {
-    fontSize: 14,
-    color: '#333',
-    fontWeight: '500',
-  },
-  tagTextGood: {
-    color: '#10B981',
-  },
-  tagTextTraining: {
-    color: '#10B981',
-  },
-  tagTextWarning: {
-    color: '#EF4444',
-  },
-  specialNeeds: {
-    fontSize: 16,
-    color: '#666',
-    backgroundColor: '#FFF7ED',
-    padding: 16,
-    borderRadius: 12,
-    borderLeftWidth: 4,
-    borderLeftColor: '#F59E0B',
-  },
-  medicalItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  medicalInfo: {
-    flex: 1,
-  },
-  medicalName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 4,
-  },
-  medicalDate: {
-    fontSize: 14,
-    color: '#666',
-  },
-  medicalNext: {
-    fontSize: 14,
-    color: '#10B981',
-    fontWeight: '500',
-  },
-  medicationItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  medicationInfo: {
-    flex: 1,
-  },
-  medicationName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 4,
-  },
-  medicationFreq: {
-    fontSize: 14,
-    color: '#666',
-  },
-  medicationLast: {
-    fontSize: 14,
-    color: '#999',
-  },
-  vetInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F9F9F9',
-    padding: 16,
-    borderRadius: 12,
-  },
-  vetDetails: {
-    flex: 1,
-  },
-  vetName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  vetClinic: {
-    fontSize: 14,
-    color: '#666',
-  },
-  callButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FF5A5F20',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  careItem: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-  careContent: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  careTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  careDescription: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-  },
-  contactItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#F9F9F9',
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  contactInfo: {
-    flex: 1,
-  },
-  contactName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
-  },
-  contactPhone: {
-    fontSize: 14,
-    color: '#666',
-  },
-  bookingItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  bookingInfo: {
-    flex: 1,
-  },
-  bookingService: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 4,
-  },
-  bookingCaregiver: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
-  },
-  bookingDate: {
-    fontSize: 12,
-    color: '#999',
-  },
-  bookingStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 8,
-  },
-  statusText: {
-    fontSize: 12,
-    color: '#666',
-    textTransform: 'capitalize',
-  },
-  actionsSection: {
-    backgroundColor: 'white',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
-    marginBottom: 32,
-    gap: 12,
-  },
-  findCareButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FF5A5F',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
-  },
-  findCareButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  deleteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#EF4444',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
-  },
-  deleteButtonText: {
-    color: '#EF4444',
-    fontSize: 16,
-    fontWeight: '600',
+    backgroundColor: '#F8F9FA',
   },
   loadingContainer: {
     flex: 1,
@@ -735,8 +345,265 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
+    marginTop: 16,
     fontSize: 16,
     color: '#666',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    fontSize: 18,
+    color: '#666',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  editButton: {
+    padding: 8,
+  },
+  content: {
+    flex: 1,
+  },
+  imageGallery: {
+    height: 300,
+    backgroundColor: 'white',
+  },
+  petImage: {
+    width: width,
+    height: 300,
+    resizeMode: 'cover',
+  },
+  imagePlaceholder: {
+    height: 300,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    marginTop: 12,
+  },
+  imageIndicators: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  indicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  activeIndicator: {
+    backgroundColor: 'white',
+  },
+  petHeader: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  petNameSection: {
+    marginBottom: 16,
+  },
+  petName: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  petBreed: {
+    fontSize: 18,
+    color: '#666',
+    marginBottom: 4,
+  },
+  petAge: {
+    fontSize: 16,
+    color: '#666',
+  },
+  petTags: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  tag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  tagText: {
+    fontSize: 12,
+    color: 'white',
+    fontWeight: '600',
+    textTransform: 'capitalize',
+  },
+  infoSection: {
+    backgroundColor: 'white',
+    marginTop: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 16,
+  },
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  infoIcon: {
+    marginRight: 12,
+    width: 20,
+  },
+  infoContent: {
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  infoValue: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  description: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 24,
+  },
+  medicalInfo: {
+    marginBottom: 20,
+  },
+  medicalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  medicalText: {
+    fontSize: 15,
+    color: '#666',
+    lineHeight: 22,
+  },
+  specialNeeds: {
+    marginBottom: 20,
+  },
+  needItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  needText: {
+    fontSize: 14,
+    color: '#92400E',
+    marginLeft: 8,
+    flex: 1,
+  },
+  vaccinationRecords: {
+    gap: 12,
+  },
+  vaccinationItem: {
+    backgroundColor: '#F9FAFB',
+    padding: 16,
+    borderRadius: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+  },
+  vaccinationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  vaccineName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  vaccinationDate: {
+    fontSize: 14,
+    color: '#10B981',
+    fontWeight: '500',
+  },
+  veterinarian: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  vaccinationNotes: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  behavioralInfo: {
+    marginBottom: 20,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+  editActionButton: {
+    flex: 1,
+    backgroundColor: '#FF5A5F',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  deleteActionButton: {
+    flex: 1,
+    backgroundColor: '#DC2626',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  actionButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  bottomPadding: {
+    height: 40,
   },
 });
 

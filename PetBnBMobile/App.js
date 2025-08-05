@@ -38,7 +38,7 @@ import MyServicesScreen from './src/screens/MyServicesScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import HelpSupportScreen from './src/screens/HelpSupportScreen';
 import AboutScreen from './src/screens/AboutScreen';
-
+import MyPetsScreen from './src/screens/MyPetsScreen';
 // NEW: Booking Management Screens
 import BookingDetailsScreen from './src/screens/BookingDetailsScreen';
 import BookingManagementScreen from './src/screens/BookingManagementScreen';
@@ -119,6 +119,29 @@ function AuthNavigator() {
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
+      <Stack.Screen 
+                name="MyPets" 
+                component={MyPetsScreen}
+                options={{
+                  headerShown: true,
+                  title: 'My Pets'
+                }}
+              />
+              <Stack.Screen 
+                name="AddPet" 
+                component={AddPetScreen}
+                options={{
+                  headerShown: false,
+                  presentation: 'modal'
+                }}
+              />
+              <Stack.Screen 
+                name="PetDetails" 
+                component={PetDetailsScreen}
+                options={{
+                  headerShown: false
+                }}
+              />
     </Stack.Navigator>
   );
 }
@@ -168,7 +191,9 @@ function AppNavigator() {
             <>
               {/* Main App Screens */}
               <Stack.Screen name="MainTabs" component={TabNavigator} />
-              
+              <Stack.Screen name="MyPets" component={MyPetsScreen} options={{ headerShown: true, title: 'My Pets' }} />
+              <Stack.Screen name="AddPet" component={AddPetScreen} options={{ headerShown: false, presentation: 'modal' }} />
+              <Stack.Screen name="PetDetails" component={PetDetailsScreen} options={{ headerShown: false }} />
               {/* Modal/Detail Screens */}
               <Stack.Screen 
                 name="BookingDetails" 
