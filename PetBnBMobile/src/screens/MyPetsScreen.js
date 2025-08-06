@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { useFocusEffect } from '@react-navigation/native';
+import { petsAPI } from '../services/api';
 
 const MyPetsScreen = ({ navigation }) => {
   const { user } = useAuth();
@@ -22,55 +23,24 @@ const MyPetsScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Mock data - replace with actual API call
-  const mockPets = [
-    {
-      id: '1',
-      name: 'Buddy',
-      breed: 'Golden Retriever',
-      age: 3,
-      weight: 25,
-      gender: 'Male',
-      color: 'Golden',
-      image: 'https://images.unsplash.com/photo-1552053831-71594a27632d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
-      lastCheckup: '2024-01-15',
-      isActive: true,
-    },
-    {
-      id: '2',
-      name: 'Luna',
-      breed: 'Siamese Cat',
-      age: 2,
-      weight: 4.5,
-      gender: 'Female',
-      color: 'Cream/Brown',
-      image: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
-      lastCheckup: '2024-02-20',
-      isActive: true,
-    },
-    {
-      id: '3',
-      name: 'Charlie',
-      breed: 'French Bulldog',
-      age: 1,
-      weight: 12,
-      gender: 'Male',
-      color: 'Brindle',
-      image: 'https://images.unsplash.com/photo-1583337130417-3346a1be7dee?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
-      lastCheckup: '2024-03-10',
-      isActive: true,
-    },
-  ];
-
   const loadPets = async () => {
     setLoading(true);
     try {
-      // Mock API call - replace with actual API
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setPets(mockPets);
+      console.log('Loading pets from API...');
+      const petsData = await petsAPI.getAllPets();
+      console.log('Pets loaded:', petsData.length);
+      setPets(petsData);
     } catch (error) {
       console.error('Error loading pets:', error);
-      toast.error('Failed to load pets');
+      if (error.response?.status === 401) {
+        toast.error('Session expired. Please login again.');
+      } else if (error.response?.status === 403) {
+        toast.error('Access denied. Please check your permissions.');
+      } else if (error.response?.status >= 500) {
+        toast.error('Server error. Please try again later.');
+      } else {
+        toast.error('Failed to load pets. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -93,12 +63,25 @@ const MyPetsScreen = ({ navigation }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Mock delete - replace with actual API call
+              console.log(`Deleting pet ${petId}...`);
+              await petsAPI.deletePet(petId);
+              console.log('Pet deleted successfully');
+              
+              // Remove pet from local state
               setPets(prev => prev.filter(pet => pet.id !== petId));
               toast.success(`${petName} has been removed from your pets`);
             } catch (error) {
               console.error('Error deleting pet:', error);
-              toast.error('Failed to delete pet');
+              
+              if (error.response?.status === 400) {
+                toast.error(error.response.data.detail || 'Cannot delete pet with active bookings');
+              } else if (error.response?.status === 404) {
+                toast.error('Pet not found');
+                // Remove from local state anyway
+                setPets(prev => prev.filter(pet => pet.id !== petId));
+              } else {
+                toast.error('Failed to delete pet. Please try again.');
+              }
             }
           },
         },
@@ -107,8 +90,38 @@ const MyPetsScreen = ({ navigation }) => {
   };
 
   const getAgeText = (age) => {
+    if (!age) return 'Age unknown';
     if (age < 1) return `${Math.round(age * 12)} months`;
     return age === 1 ? '1 year' : `${age} years`;
+  };
+
+  const getPetImage = (pet) => {
+    // Use the first image from the images array, or a default image
+    if (pet.images && pet.images.length > 0) {
+      return pet.images[0];
+    }
+    
+    // Default images based on species
+    const defaultImages = {
+      dog: 'https://images.unsplash.com/photo-1552053831-71594a27632d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+      cat: 'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+      bird: 'https://images.unsplash.com/photo-1571752726703-5e7d1f6a986d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+      rabbit: 'https://images.unsplash.com/photo-1585110396000-c9ffd4e4b308?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+    };
+    
+    return defaultImages[pet.species?.toLowerCase()] || defaultImages.dog;
+  };
+
+  const getLastCheckupDate = (pet) => {
+    // Try to parse medical info for last checkup
+    try {
+      if (pet.medical_info && typeof pet.medical_info === 'object') {
+        return pet.medical_info.last_checkup || null;
+      }
+      return null;
+    } catch (error) {
+      return null;
+    }
   };
 
   const renderPetCard = (pet) => (
@@ -117,7 +130,7 @@ const MyPetsScreen = ({ navigation }) => {
       style={styles.petCard}
       onPress={() => navigation.navigate('PetDetails', { petId: pet.id })}
     >
-      <Image source={{ uri: pet.image }} style={styles.petImage} />
+      <Image source={{ uri: getPetImage(pet) }} style={styles.petImage} />
       
       <View style={styles.petInfo}>
         <View style={styles.petHeader}>
@@ -130,36 +143,41 @@ const MyPetsScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
         
-        <Text style={styles.petBreed}>{pet.breed}</Text>
+        <Text style={styles.petBreed}>{pet.breed || `${pet.species} (Mixed breed)`}</Text>
         
         <View style={styles.petDetails}>
           <View style={styles.detailItem}>
             <Ionicons name="calendar-outline" size={16} color="#666" />
-            <Text style={styles.detailText}>{getAgeText(pet.age)} old</Text>
+            <Text style={styles.detailText}>{getAgeText(pet.age)}</Text>
           </View>
           
           <View style={styles.detailItem}>
             <Ionicons 
-              name={pet.gender === 'Male' ? 'male' : 'female'} 
+              name={pet.gender === 'male' ? 'male' : pet.gender === 'female' ? 'female' : 'help'} 
               size={16} 
-              color={pet.gender === 'Male' ? '#3B82F6' : '#EC4899'} 
+              color={pet.gender === 'male' ? '#3B82F6' : pet.gender === 'female' ? '#EC4899' : '#666'} 
             />
-            <Text style={styles.detailText}>{pet.gender}</Text>
+            <Text style={styles.detailText}>{pet.gender || 'Unknown'}</Text>
           </View>
           
-          <View style={styles.detailItem}>
-            <Ionicons name="fitness-outline" size={16} color="#666" />
-            <Text style={styles.detailText}>{pet.weight} kg</Text>
-          </View>
+          {pet.weight && (
+            <View style={styles.detailItem}>
+              <Ionicons name="fitness-outline" size={16} color="#666" />
+              <Text style={styles.detailText}>{pet.weight} kg</Text>
+            </View>
+          )}
         </View>
         
         <View style={styles.petFooter}>
           <Text style={styles.lastCheckup}>
-            Last checkup: {new Date(pet.lastCheckup).toLocaleDateString()}
+            {pet.updated_at ? 
+              `Updated: ${new Date(pet.updated_at).toLocaleDateString()}` :
+              'Recently added'
+            }
           </Text>
-          <View style={[styles.statusBadge, pet.isActive && styles.statusActive]}>
-            <Text style={[styles.statusText, pet.isActive && styles.statusActiveText]}>
-              {pet.isActive ? 'Active' : 'Inactive'}
+          <View style={[styles.statusBadge, pet.is_active && styles.statusActive]}>
+            <Text style={[styles.statusText, pet.is_active && styles.statusActiveText]}>
+              {pet.is_active ? 'Active' : 'Inactive'}
             </Text>
           </View>
         </View>
@@ -173,6 +191,24 @@ const MyPetsScreen = ({ navigation }) => {
       loadPets();
     }, [])
   );
+
+  const getStats = () => {
+    const activePets = pets.filter(p => p.is_active).length;
+    const totalPets = pets.length;
+    const needsCheckup = pets.filter(p => {
+      const lastCheckup = getLastCheckupDate(p);
+      if (!lastCheckup) return true; // No checkup data
+      
+      const checkupDate = new Date(lastCheckup);
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      return checkupDate < sixMonthsAgo;
+    }).length;
+    
+    return { totalPets, activePets, needsCheckup };
+  };
+
+  const stats = getStats();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -203,22 +239,15 @@ const MyPetsScreen = ({ navigation }) => {
         {/* Stats Section */}
         <View style={styles.statsSection}>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{pets.length}</Text>
+            <Text style={styles.statNumber}>{stats.totalPets}</Text>
             <Text style={styles.statLabel}>Total Pets</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>{pets.filter(p => p.isActive).length}</Text>
+            <Text style={styles.statNumber}>{stats.activePets}</Text>
             <Text style={styles.statLabel}>Active</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>
-              {pets.filter(p => {
-                const lastCheckup = new Date(p.lastCheckup);
-                const sixMonthsAgo = new Date();
-                sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-                return lastCheckup < sixMonthsAgo;
-              }).length}
-            </Text>
+            <Text style={styles.statNumber}>{stats.needsCheckup}</Text>
             <Text style={styles.statLabel}>Need Checkup</Text>
           </View>
         </View>
@@ -373,11 +402,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666',
     marginBottom: 12,
+    textTransform: 'capitalize',
   },
   petDetails: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 12,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   detailItem: {
     flexDirection: 'row',
@@ -387,6 +419,7 @@ const styles = StyleSheet.create({
   detailText: {
     fontSize: 14,
     color: '#666',
+    textTransform: 'capitalize',
   },
   petFooter: {
     flexDirection: 'row',

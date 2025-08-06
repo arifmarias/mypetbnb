@@ -1,12 +1,15 @@
-import axios from 'axios';
+// PetBnBMobile/src/services/api.js - Add Pets API Integration
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 
-// Use your computer's IP address (replace with your actual IP)
-const API_BASE_URL = 'http://192.168.68.105:8000';
+// Use your server's IP address - replace with your actual IP
+const BASE_URL = 'http://192.168.68.105:8000';
 
-export const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
+// Create axios instance
+const api = axios.create({
+  baseURL: BASE_URL,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -16,309 +19,546 @@ export const api = axios.create({
 api.interceptors.request.use(
   async (config) => {
     try {
-      const token = await AsyncStorage.getItem('token');
+      const token = await AsyncStorage.getItem('access_token');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+      
+      // Log request for debugging
       console.log(`Making ${config.method?.toUpperCase()} request to ${config.url}`);
+      if (config.data && Object.keys(config.data).length > 0) {
+        console.log('Request data:', JSON.stringify(config.data, null, 2));
+      }
+      
       return config;
     } catch (error) {
-      console.error('Error getting token:', error);
+      console.error('Error adding auth token:', error);
       return config;
     }
   },
   (error) => {
+    console.error('Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
-// Response interceptor to handle auth errors
+// Response interceptor for error handling
 api.interceptors.response.use(
   (response) => {
+    console.log(`✅ ${response.config.method?.toUpperCase()} ${response.config.url} - Status: ${response.status}`);
     return response;
   },
   async (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid
-      await AsyncStorage.removeItem('token');
-      await AsyncStorage.removeItem('user_id');
-      // You might want to redirect to login screen here
-      console.log('Token expired, user needs to login again');
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      try {
+        // Try to refresh token
+        const refreshToken = await AsyncStorage.getItem('refresh_token');
+        if (refreshToken) {
+          const response = await api.post('/api/auth/refresh', {
+            refresh_token: refreshToken
+          });
+          
+          const { access_token } = response.data;
+          await AsyncStorage.setItem('access_token', access_token);
+          
+          // Retry original request
+          originalRequest.headers.Authorization = `Bearer ${access_token}`;
+          return api(originalRequest);
+        }
+      } catch (refreshError) {
+        console.error('Token refresh failed:', refreshError);
+        // Clear stored tokens
+        await AsyncStorage.multiRemove(['access_token', 'refresh_token', 'user_data']);
+        // Redirect to login would be handled by auth context
+      }
     }
-    
-    console.error('API Error:', error.response?.data || error.message);
+
+    // Log error details
+    console.error(`❌ API Error: ${error.response?.status} ${error.config?.method?.toUpperCase()} ${error.config?.url}`);
+    if (error.response?.data) {
+      console.error('Error response:', error.response.data);
+    }
+
     return Promise.reject(error);
   }
 );
 
-// API endpoints
-export const authAPI = {
-  login: (credentials) => api.post('/api/auth/login', credentials),
-  register: (userData) => api.post('/api/auth/register', userData),
-  getProfile: () => api.get('/api/auth/me'),
-  verifyEmail: (token) => api.post('/api/auth/verify-email', { token }),
-  resendVerification: () => api.post('/api/auth/resend-verification'),
-  getVerificationStatus: () => api.get('/api/auth/verification-status'),
-};
-
-export const petsAPI = {
-  getPets: () => api.get('/api/pets'),
-  createPet: (petData) => api.post('/api/pets', petData),
-  getPet: (petId) => api.get(`/api/pets/${petId}`),
-  updatePet: (petId, petData) => api.put(`/api/pets/${petId}`, petData),
-  deletePet: (petId) => api.delete(`/api/pets/${petId}`),
-};
-
-export const servicesAPI = {
-  getServices: () => api.get('/api/caregiver/services'),
-  createService: (serviceData) => api.post('/api/caregiver/services', serviceData),
-  updateService: (serviceId, serviceData) => api.put(`/api/caregiver/services/${serviceId}`, serviceData),
-  deleteService: (serviceId) => api.delete(`/api/caregiver/services/${serviceId}`),
-  searchServices: (searchParams) => api.post('/api/search/location', searchParams),
-};
-
-export const bookingsAPI = {
-  // Basic booking operations
-  getBookings: () => api.get('/api/bookings'),
-  createBooking: (bookingData) => api.post('/api/bookings', bookingData),
-  getBooking: (bookingId) => api.get(`/api/bookings/${bookingId}`),
-  
-  // Enhanced booking operations
-  getUpcomingBookings: () => api.get('/api/bookings/upcoming'),
-  getTodayBookings: () => api.get('/api/bookings/today'),
-  getBookingHistory: (params = {}) => api.get('/api/bookings/history', { params }),
-  getBookingDetails: (bookingId) => api.get(`/api/bookings/${bookingId}/details`),
-  
-  // Booking status updates
-  updateBookingStatus: (bookingId, status, data = {}) => 
-    api.put(`/api/bookings/${bookingId}/status`, { status, ...data }),
-  
-  // Booking filters
-  getFilteredBookings: (filter, params = {}) => 
-    api.get(`/api/bookings/filter/${filter}`, { params }),
-};
-
-export const messagesAPI = {
-  getMessages: (bookingId) => api.get(`/api/messages/${bookingId}`),
-  sendMessage: (messageData) => api.post('/api/messages', messageData),
-  markAsRead: (messageId) => api.put(`/api/messages/${messageId}/read`),
-};
-
-export const uploadAPI = {
-  uploadFile: (fileData) => {
-    const formData = new FormData();
-    formData.append('file', fileData);
-    return api.post('/api/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-  },
-};
-
-// Verification APIs
-export const verificationAPI = {
-  submitIdVerification: (verificationData) => api.post('/api/caregiver/submit-id-verification', verificationData),
-  getIdVerificationStatus: () => api.get('/api/caregiver/id-verification-status'),
-};
-
-// OAuth APIs
-export const oauthAPI = {
-  emergentLogin: (sessionData) => api.post('/api/auth/oauth/emergent', sessionData),
-};
-
-// Location and search APIs
-export const locationAPI = {
-  searchByLocation: (searchParams) => api.post('/api/search/location', searchParams),
-  getNearbyServices: (lat, lng, radius = 10) => api.get(`/api/search/nearby?lat=${lat}&lng=${lng}&radius=${radius}`),
-};
-
-// Statistics APIs (for dashboard) - NEW
-export const statsAPI = {
-  getUserStats: () => api.get('/api/stats/user'),
-  getCaregiverStats: () => api.get('/api/stats/caregiver'),
-  getCaregiverEarnings: () => api.get('/api/stats/caregiver/earnings'),
-  getBookingStats: () => api.get('/api/stats/bookings'),
-};
-
-// Notification APIs
-export const notificationAPI = {
-  getNotifications: () => api.get('/api/notifications'),
-  markNotificationRead: (notificationId) => api.put(`/api/notifications/${notificationId}/read`),
-  markAllNotificationsRead: () => api.put('/api/notifications/mark-all-read'),
-  updateNotificationSettings: (settings) => api.put('/api/notifications/settings', settings),
-};
-
-// Profile APIs
-export const profileAPI = {
-  updateProfile: (profileData) => api.put('/api/profile', profileData),
-  getCaregiverProfile: (userId) => api.get(`/api/profile/caregiver/${userId}`),
-  updateCaregiverProfile: (profileData) => api.put('/api/profile/caregiver', profileData),
-  uploadProfileImage: (imageData) => uploadAPI.uploadFile(imageData),
-};
-
-// Admin APIs (for future admin panel)
-export const adminAPI = {
-  getPendingVerifications: () => api.get('/api/admin/verifications/pending'),
-  approveVerification: (verificationId) => api.put(`/api/admin/verifications/${verificationId}/approve`),
-  rejectVerification: (verificationId, reason) => api.put(`/api/admin/verifications/${verificationId}/reject`, { reason }),
-  getUsersList: () => api.get('/api/admin/users'),
-  getBookingsList: () => api.get('/api/admin/bookings'),
-  getSystemStats: () => api.get('/api/admin/stats'),
-};
-
-// Helper functions for common API patterns
-export const apiHelpers = {
-  // Handle paginated responses
-  handlePagination: async (apiCall, page = 1, limit = 20) => {
-    try {
-      const response = await apiCall({ page, limit });
-      return {
-        data: response.data.items || response.data,
-        pagination: {
-          page: response.data.page || page,
-          limit: response.data.limit || limit,
-          total: response.data.total || response.data.length,
-          hasNext: response.data.has_next || false,
-          hasPrev: response.data.has_prev || false,
-        }
-      };
-    } catch (error) {
-      throw error;
-    }
-  },
-
-  // Handle file uploads with progress
-  uploadWithProgress: async (file, onProgress) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    return api.post('/api/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      onUploadProgress: (progressEvent) => {
-        if (onProgress) {
-          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          onProgress(percentCompleted);
-        }
-      },
-    });
-  },
-
-  // Handle retries for failed requests
-  retryRequest: async (apiCall, maxRetries = 3, delay = 1000) => {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        return await apiCall();
-      } catch (error) {
-        if (attempt === maxRetries) {
-          throw error;
-        }
-        
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, delay * attempt));
-      }
-    }
-  },
-
-  // Handle batch requests
-  batchRequests: async (requests) => {
-    try {
-      const responses = await Promise.allSettled(requests);
-      return responses.map((response, index) => ({
-        index,
-        success: response.status === 'fulfilled',
-        data: response.status === 'fulfilled' ? response.value.data : null,
-        error: response.status === 'rejected' ? response.reason : null,
-      }));
-    } catch (error) {
-      throw error;
-    }
-  },
-};
-
-// Enhanced error handling
-export const handleApiError = (error) => {
-  if (error.response) {
-    // Server responded with error status
-    const { status, data } = error.response;
-    
-    switch (status) {
-      case 401:
-        return 'Authentication required. Please log in again.';
-      case 403:
-        return 'You don\'t have permission to perform this action.';
-      case 404:
-        return 'The requested resource was not found.';
-      case 422:
-        return data.detail || 'Invalid data provided.';
-      case 429:
-        return 'Too many requests. Please try again later.';
-      case 500:
-        return 'Server error. Please try again later.';
-      default:
-        return data.detail || data.message || 'An unexpected error occurred.';
-    }
-  } else if (error.request) {
-    // Network error
-    return 'Network error. Please check your connection and try again.';
-  } else {
-    // Other error
-    return error.message || 'An unexpected error occurred.';
-  }
-};
-
-// Token management utilities
-export const tokenManager = {
-  // Get stored token
-  getToken: async () => {
-    try {
-      return await AsyncStorage.getItem('token');
-    } catch (error) {
-      console.error('Error getting token:', error);
-      return null;
-    }
-  },
-
-  // Set token
-  setToken: async (token) => {
-    try {
-      await AsyncStorage.setItem('token', token);
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    } catch (error) {
-      console.error('Error setting token:', error);
-    }
-  },
-
-  // Remove token
-  removeToken: async () => {
-    try {
-      await AsyncStorage.removeItem('token');
-      delete api.defaults.headers.common['Authorization'];
-    } catch (error) {
-      console.error('Error removing token:', error);
-    }
-  },
-
-  // Check if token exists
-  hasToken: async () => {
-    const token = await tokenManager.getToken();
-    return !!token;
-  },
-};
-
-// Initialize token on app start
+// Initialize API (call this in App.js)
 export const initializeAPI = async () => {
   try {
-    const token = await tokenManager.getToken();
-    if (token) {
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    }
+    // Test API connection
+    const response = await api.get('/health');
+    console.log('✅ API connection established:', response.data);
+    return true;
   } catch (error) {
-    console.error('Error initializing API:', error);
+    console.error('❌ API connection failed:', error.message);
+    return false;
   }
 };
 
-// Export the configured axios instance
+// Auth API
+export const authAPI = {
+  login: async (email, password) => {
+    const response = await api.post('/api/auth/login', {
+      email,
+      password,
+    });
+    return response.data;
+  },
+
+  register: async (userData) => {
+    const response = await api.post('/api/auth/register', userData);
+    return response.data;
+  },
+
+  getCurrentUser: async () => {
+    const response = await api.get('/api/auth/me');
+    return response.data;
+  },
+
+  logout: async () => {
+    try {
+      await api.post('/api/auth/logout');
+    } catch (error) {
+      console.warn('Logout API call failed:', error);
+    }
+    // Clear local storage regardless
+    await AsyncStorage.multiRemove(['access_token', 'refresh_token', 'user_data']);
+  },
+
+  verifyEmail: async (token) => {
+    const response = await api.post('/api/auth/verify-email', { token });
+    return response.data;
+  },
+
+  requestPasswordReset: async (email) => {
+    const response = await api.post('/api/auth/request-password-reset', { email });
+    return response.data;
+  },
+
+  resetPassword: async (token, newPassword) => {
+    const response = await api.post('/api/auth/reset-password', {
+      token,
+      new_password: newPassword,
+    });
+    return response.data;
+  },
+};
+
+// Pets API - Updated to use real backend
+export const petsAPI = {
+  // Get all pets for current user
+  getAllPets: async () => {
+    const response = await api.get('/api/pets');
+    return response.data;
+  },
+
+  // Get pet by ID
+  getPetById: async (petId) => {
+    const response = await api.get(`/api/pets/${petId}`);
+    return response.data;
+  },
+
+  // Create new pet
+  createPet: async (petData) => {
+    console.log('Original pet data from form:', petData);
+    
+    // Transform frontend data to match backend PetCreate model exactly
+    const backendPetData = {
+      // Basic required fields
+      name: petData.name?.trim() || '',
+      species: petData.species || 'dog',
+      breed: petData.breed?.trim() || null,
+      age: petData.age ? parseInt(petData.age) : null,
+      weight: petData.weight ? parseFloat(petData.weight) : null,
+      gender: petData.gender || 'unknown',
+      description: petData.description?.trim() || null,
+      
+      // Images array
+      images: petData.image ? [petData.image] : [],
+      
+      // Complex JSON fields - send as objects, not strings
+      medical_info: {
+        vaccinations: petData.medical_info?.vaccinations?.trim() || '',
+        medications: petData.medical_info?.medications?.trim() || '',
+        allergies: petData.medical_info?.allergies?.trim() || '',
+        conditions: petData.medical_info?.conditions?.trim() || '',
+        veterinarian_name: petData.medical_info?.veterinarian_name?.trim() || '',
+        veterinarian_phone: petData.medical_info?.veterinarian_phone?.trim() || '',
+      },
+      
+      behavioral_notes: {
+        personality: petData.behavior_info?.personality?.trim() || '',
+        good_with: petData.behavior_info?.good_with?.trim() || '',
+        training: petData.behavior_info?.training?.trim() || '',
+        special_needs: petData.behavior_info?.special_needs?.trim() || '',
+      },
+      
+      emergency_contact: {
+        name: petData.care_instructions?.emergency_contact_name?.trim() || '',
+        phone: petData.care_instructions?.emergency_contact_phone?.trim() || '',
+        feeding: petData.care_instructions?.feeding?.trim() || '',
+        exercise: petData.care_instructions?.exercise?.trim() || '',
+        grooming: petData.care_instructions?.grooming?.trim() || '',
+      },
+      
+      // Additional fields
+      vaccination_records: {},
+      special_needs: {},
+      is_active: true,
+    };
+
+    console.log('Transformed data for backend:', JSON.stringify(backendPetData, null, 2));
+
+    const response = await api.post('/api/pets', backendPetData);
+    return response.data;
+  },
+
+  // Update pet
+  updatePet: async (petId, petData) => {
+    console.log('Updating pet with data:', petData);
+    
+    // Transform data similar to createPet but only include changed fields
+    const backendPetData = {};
+    
+    // Only include fields that have values
+    if (petData.name !== undefined) backendPetData.name = petData.name?.trim();
+    if (petData.species !== undefined) backendPetData.species = petData.species;
+    if (petData.breed !== undefined) backendPetData.breed = petData.breed?.trim() || null;
+    if (petData.age !== undefined) backendPetData.age = petData.age ? parseInt(petData.age) : null;
+    if (petData.weight !== undefined) backendPetData.weight = petData.weight ? parseFloat(petData.weight) : null;
+    if (petData.gender !== undefined) backendPetData.gender = petData.gender;
+    if (petData.description !== undefined) backendPetData.description = petData.description?.trim() || null;
+    if (petData.images !== undefined) backendPetData.images = petData.images;
+    
+    // Handle complex objects
+    if (petData.medical_info) {
+      backendPetData.medical_info = {
+        vaccinations: petData.medical_info.vaccinations?.trim() || '',
+        medications: petData.medical_info.medications?.trim() || '',
+        allergies: petData.medical_info.allergies?.trim() || '',
+        conditions: petData.medical_info.conditions?.trim() || '',
+        veterinarian_name: petData.medical_info.veterinarian_name?.trim() || '',
+        veterinarian_phone: petData.medical_info.veterinarian_phone?.trim() || '',
+      };
+    }
+    
+    if (petData.behavior_info) {
+      backendPetData.behavioral_notes = {
+        personality: petData.behavior_info.personality?.trim() || '',
+        good_with: petData.behavior_info.good_with?.trim() || '',
+        training: petData.behavior_info.training?.trim() || '',
+        special_needs: petData.behavior_info.special_needs?.trim() || '',
+      };
+    }
+    
+    if (petData.care_instructions) {
+      backendPetData.emergency_contact = {
+        name: petData.care_instructions.emergency_contact_name?.trim() || '',
+        phone: petData.care_instructions.emergency_contact_phone?.trim() || '',
+        feeding: petData.care_instructions.feeding?.trim() || '',
+        exercise: petData.care_instructions.exercise?.trim() || '',
+        grooming: petData.care_instructions.grooming?.trim() || '',
+      };
+    }
+
+    console.log('Transformed update data for backend:', JSON.stringify(backendPetData, null, 2));
+
+    const response = await api.put(`/api/pets/${petId}`, backendPetData);
+    return response.data;
+  },
+
+  // Delete pet
+  deletePet: async (petId) => {
+    const response = await api.delete(`/api/pets/${petId}`);
+    return response.data;
+  },
+
+  // Upload pet image
+  uploadPetImage: async (petId, imageUri) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri: imageUri,
+        type: 'image/jpeg',
+        name: `pet_${petId}_${Date.now()}.jpg`,
+      });
+
+      const response = await api.post(`/api/pets/${petId}/upload-image`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Pet image upload error:', error);
+      throw error;
+    }
+  },
+};
+
+// Services API - Updated to use real backend
+export const servicesAPI = {
+  // Search services with filters
+  searchServices: async (filters = {}) => {
+    const params = new URLSearchParams();
+    
+    if (filters.service_type) params.append('service_type', filters.service_type);
+    if (filters.location) params.append('location', filters.location);
+    if (filters.min_price) params.append('min_price', filters.min_price);
+    if (filters.max_price) params.append('max_price', filters.max_price);
+    if (filters.rating) params.append('min_rating', filters.rating);
+    if (filters.latitude && filters.longitude) {
+      params.append('latitude', filters.latitude);
+      params.append('longitude', filters.longitude);
+      params.append('radius', filters.radius || 10);
+    }
+
+    const response = await api.get(`/api/services/search?${params.toString()}`);
+    return response.data;
+  },
+
+  // Get service by ID
+  getServiceById: async (serviceId) => {
+    const response = await api.get(`/api/services/${serviceId}`);
+    return response.data;
+  },
+
+  // Get services by caregiver
+  getServicesByCaregiver: async (caregiverId) => {
+    const response = await api.get(`/api/services/caregiver/${caregiverId}`);
+    return response.data;
+  },
+
+  // Create service (for caregivers)
+  createService: async (serviceData) => {
+    const response = await api.post('/api/services', serviceData);
+    return response.data;
+  },
+
+  // Update service
+  updateService: async (serviceId, serviceData) => {
+    const response = await api.put(`/api/services/${serviceId}`, serviceData);
+    return response.data;
+  },
+
+  // Delete service
+  deleteService: async (serviceId) => {
+    const response = await api.delete(`/api/services/${serviceId}`);
+    return response.data;
+  },
+};
+
+// Bookings API - Updated to use real backend
+export const bookingsAPI = {
+  // Get all bookings for current user
+  getAllBookings: async (filters = {}) => {
+    const params = new URLSearchParams();
+    
+    if (filters.status) params.append('status', filters.status);
+    if (filters.start_date) params.append('start_date', filters.start_date);
+    if (filters.end_date) params.append('end_date', filters.end_date);
+
+    const response = await api.get(`/api/bookings?${params.toString()}`);
+    return response.data;
+  },
+
+  // Get booking by ID
+  getBookingById: async (bookingId) => {
+    const response = await api.get(`/api/bookings/${bookingId}`);
+    return response.data;
+  },
+
+  // Create new booking
+  createBooking: async (bookingData) => {
+    // Transform frontend booking data to backend format
+    const backendBookingData = {
+      service_id: bookingData.serviceId,
+      pet_ids: bookingData.selectedPets, // Array of pet IDs
+      start_datetime: new Date(`${bookingData.serviceDate.toDateString()} ${bookingData.serviceTime}`).toISOString(),
+      end_datetime: new Date(`${bookingData.serviceDate.toDateString()} ${bookingData.serviceTime}`).toISOString(), // Will be calculated by backend
+      special_requirements: bookingData.specialRequirements,
+      emergency_contact: JSON.stringify(bookingData.emergencyContact),
+      payment_method: bookingData.paymentMethod,
+    };
+
+    const response = await api.post('/api/bookings', backendBookingData);
+    return response.data;
+  },
+
+  // Update booking
+  updateBooking: async (bookingId, updateData) => {
+    const response = await api.put(`/api/bookings/${bookingId}`, updateData);
+    return response.data;
+  },
+
+  // Cancel booking
+  cancelBooking: async (bookingId, reason) => {
+    const response = await api.post(`/api/bookings/${bookingId}/cancel`, {
+      cancellation_reason: reason,
+    });
+    return response.data;
+  },
+
+  // Confirm booking (for caregivers)
+  confirmBooking: async (bookingId) => {
+    const response = await api.post(`/api/bookings/${bookingId}/confirm`);
+    return response.data;
+  },
+
+  // Complete booking
+  completeBooking: async (bookingId) => {
+    const response = await api.post(`/api/bookings/${bookingId}/complete`);
+    return response.data;
+  },
+
+  // Get filtered bookings
+  getFilteredBookings: async (filterType) => {
+    const response = await api.get(`/api/bookings/filter/${filterType}`);
+    return response.data;
+  },
+};
+
+// Reviews API
+export const reviewsAPI = {
+  // Get reviews for a service
+  getServiceReviews: async (serviceId) => {
+    const response = await api.get(`/api/reviews/service/${serviceId}`);
+    return response.data;
+  },
+
+  // Get reviews by user
+  getUserReviews: async (userId) => {
+    const response = await api.get(`/api/reviews/user/${userId}`);
+    return response.data;
+  },
+
+  // Create review
+  createReview: async (reviewData) => {
+    const response = await api.post('/api/reviews', reviewData);
+    return response.data;
+  },
+
+  // Update review
+  updateReview: async (reviewId, reviewData) => {
+    const response = await api.put(`/api/reviews/${reviewId}`, reviewData);
+    return response.data;
+  },
+
+  // Delete review
+  deleteReview: async (reviewId) => {
+    const response = await api.delete(`/api/reviews/${reviewId}`);
+    return response.data;
+  },
+};
+
+// User Profile API
+export const userAPI = {
+  // Update profile
+  updateProfile: async (userData) => {
+    const response = await api.put('/api/users/profile', userData);
+    return response.data;
+  },
+
+  // Upload profile image
+  uploadProfileImage: async (imageUri) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', {
+        uri: imageUri,
+        type: 'image/jpeg',
+        name: `profile_${Date.now()}.jpg`,
+      });
+
+      const response = await api.post('/api/users/upload-profile-image', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      
+      return response.data;
+    } catch (error) {
+      console.error('Profile image upload error:', error);
+      throw error;
+    }
+  },
+
+  // Get user stats
+  getUserStats: async () => {
+    const response = await api.get('/api/stats/user');
+    return response.data;
+  },
+};
+
+// Messages API
+export const messagesAPI = {
+  // Get conversation messages
+  getMessages: async (conversationId) => {
+    const response = await api.get(`/api/messages/conversation/${conversationId}`);
+    return response.data;
+  },
+
+  // Send message
+  sendMessage: async (messageData) => {
+    const response = await api.post('/api/messages', messageData);
+    return response.data;
+  },
+
+  // Mark message as read
+  markAsRead: async (messageId) => {
+    const response = await api.put(`/api/messages/${messageId}/read`);
+    return response.data;
+  },
+};
+
+// Payment API
+export const paymentAPI = {
+  // Create payment intent
+  createPaymentIntent: async (bookingId, amount) => {
+    const response = await api.post('/api/payments/create-intent', {
+      booking_id: bookingId,
+      amount: amount,
+    });
+    return response.data;
+  },
+
+  // Confirm payment
+  confirmPayment: async (paymentIntentId) => {
+    const response = await api.post('/api/payments/confirm', {
+      payment_intent_id: paymentIntentId,
+    });
+    return response.data;
+  },
+};
+
+// File upload helper
+export const uploadFile = async (fileUri, endpoint, fieldName = 'file') => {
+  try {
+    const formData = new FormData();
+    formData.append(fieldName, {
+      uri: fileUri,
+      type: 'image/jpeg',
+      name: `upload_${Date.now()}.jpg`,
+    });
+
+    const response = await api.post(endpoint, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('File upload error:', error);
+    throw error;
+  }
+};
+
+// Export the configured axios instance for custom requests
+export { api };
 export default api;

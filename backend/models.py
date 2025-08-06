@@ -94,22 +94,24 @@ class UserResponse(UserBase, BaseModelWithTimestamps):
 # Pet models
 class PetBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    species: str = Field(..., max_length=50)
+    species: str = Field(default="dog", max_length=50)
     breed: Optional[str] = Field(None, max_length=100)
     age: Optional[int] = Field(None, ge=0, le=50)
     weight: Optional[float] = Field(None, gt=0, le=999.99)
-    gender: Optional[Gender] = Gender.UNKNOWN
+    gender: Optional[str] = Field(default="unknown", max_length=20)  # Changed to str to match frontend
     description: Optional[str] = None
-    special_needs: Optional[Dict[str, Any]] = None
-    vaccination_records: Optional[Dict[str, Any]] = None
-    images: Optional[List[str]] = None
-    medical_info: Optional[str] = None
-    behavioral_notes: Optional[str] = None
-    emergency_contact: Optional[str] = None
-    is_active: bool = True
+    images: Optional[List[str]] = Field(default_factory=list)
+    is_active: bool = Field(default=True)
+    
+    # Complex nested data as dictionaries
+    medical_info: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    behavioral_notes: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    emergency_contact: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    vaccination_records: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    special_needs: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 class PetCreate(PetBase):
-    owner_id: uuid.UUID
+    pass  # owner_id will be set from the authenticated user, not from request
 
 class PetUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=100)
@@ -117,15 +119,17 @@ class PetUpdate(BaseModel):
     breed: Optional[str] = Field(None, max_length=100)
     age: Optional[int] = Field(None, ge=0, le=50)
     weight: Optional[float] = Field(None, gt=0, le=999.99)
-    gender: Optional[Gender] = None
+    gender: Optional[str] = Field(None, max_length=20)  # Changed to str
     description: Optional[str] = None
-    special_needs: Optional[Dict[str, Any]] = None
-    vaccination_records: Optional[Dict[str, Any]] = None
     images: Optional[List[str]] = None
-    medical_info: Optional[str] = None
-    behavioral_notes: Optional[str] = None
-    emergency_contact: Optional[str] = None
     is_active: Optional[bool] = None
+    
+    # Complex nested data as dictionaries
+    medical_info: Optional[Dict[str, Any]] = None
+    behavioral_notes: Optional[Dict[str, Any]] = None
+    emergency_contact: Optional[Dict[str, Any]] = None
+    vaccination_records: Optional[Dict[str, Any]] = None
+    special_needs: Optional[Dict[str, Any]] = None
 
 class PetResponse(PetBase, BaseModelWithTimestamps):
     owner_id: uuid.UUID

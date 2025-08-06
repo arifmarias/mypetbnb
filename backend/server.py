@@ -43,6 +43,7 @@ from models import (
 )
 from auth import AuthService, get_current_user
 from verification import verification_service, oauth_service
+from pets_endpoints import pets_router
 
 # Load environment variables
 ROOT_DIR = Path(__file__).parent
@@ -2160,6 +2161,7 @@ async def update_booking_status(
 app.include_router(api_router)
 app.include_router(booking_router)
 app.include_router(stats_router)
+app.include_router(pets_router)
 # Root endpoint
 @app.get("/")
 async def root():
